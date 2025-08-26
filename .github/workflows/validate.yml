@@ -43,7 +43,13 @@ jobs:
           go-version: '1.21'
 
       - name: Run tests
-        run: go test -v ./...
+        run: |
+          # Check if any test files exist
+          if find . -name "*_test.go" -type f | grep -q .; then
+            go test -v ./...
+          else
+            echo "No test files found, skipping tests"
+          fi
 
       - name: Build binary
         run: go build -o editorlint cmd/editorlint/main.go

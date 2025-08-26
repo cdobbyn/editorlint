@@ -133,6 +133,8 @@ jobs:
           # Create archive
           ARCHIVE_NAME="editorlint_v${VERSION}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = "windows" ]; then
+            # Install zip if not available
+            sudo apt-get update && sudo apt-get install -y zip
             cd dist && zip "../${ARCHIVE_NAME}.zip" "${BINARY_NAME}" && cd ..
           else
             tar -czf "${ARCHIVE_NAME}.tar.gz" -C dist "${BINARY_NAME}"

@@ -3,26 +3,32 @@
 
 # Semantic versioning bumps based on commit types
 bumps:
-  # Major version bumps for breaking changes
-  - file: "**"
-    regex: "BREAKING CHANGE|!:"
+  - regex:
+      - "BREAKING CHANGE"
+      - "!:"
     type: "major"
   
-  # Minor version bumps for new features
-  - file: "**"  
-    regex: "^feat|^feature"
+  - regex:
+      - "^feat"
+      - "^feature"
     type: "minor"
     
-  # Patch version bumps for fixes and other changes
-  - file: "**"
-    regex: "^fix|^chore|^docs|^style|^refactor|^perf|^test|^ci|^build"
+  - regex:
+      - "^fix"
+      - "^chore" 
+      - "^docs"
+      - "^style"
+      - "^refactor"
+      - "^perf"
+      - "^test"
+      - "^ci"
+      - "^build"
     type: "patch"
 
 # Git configuration
 git:
   ignoreDetached: false
 
-# Environment variables required
+# Environment variables
 env:
-  - name: "GITHUB_TOKEN"
-    required: true
+  GITHUB_TOKEN: true

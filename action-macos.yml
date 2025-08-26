@@ -1,0 +1,183 @@
+name: 'EditorConfig Lint (macOS)'
+description: 'macOS-specific implementation for EditorConfig Lint'
+
+inputs:
+  version:
+    description: 'Version of editorlint to use'
+    required: false
+    default: 'latest'
+  path:
+    description: 'Path to file or directory to validate'
+    required: false
+    default: '.'
+  config-file:
+    description: 'Path to custom .editorconfig file (optional)'
+    required: false
+    default: ''
+  recurse:
+    description: 'Process files recursively in directories'
+    required: false
+    default: 'true'
+  fix:
+    description: 'Automatically fix violations instead of just reporting them'
+    required: false
+    default: 'false'
+  output-format:
+    description: 'Output format: default, tabular, json, quiet'
+    required: false
+    default: 'default'
+  fail-on-violations:
+    description: 'Fail the action if violations are found'
+    required: false
+    default: 'true'
+  auto-commit:
+    description: 'Automatically commit fixes when fix=true'
+    required: false
+    default: 'false'
+  commit-message:
+    description: 'Commit message for auto-committed fixes'
+    required: false
+    default: 'fix: auto-fix editorconfig violations'
+  git-user-name:
+    description: 'Git user name for auto-commits'
+    required: false
+    default: 'github-actions[bot]'
+  git-user-email:
+    description: 'Git user email for auto-commits'
+    required: false
+    default: 'github-actions[bot]@users.noreply.github.com'
+  ignore-patterns:
+    description: 'Comma-separated list of glob patterns to ignore'
+    required: false
+    default: ''
+
+outputs:
+  violations-found:
+    description: 'Whether any violations were found (true/false)'
+  files-processed:
+    description: 'Number of files processed'
+  files-fixed:
+    description: 'Number of files fixed (when fix=true)'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download editorlint binary
+      shell: bash
+      run: |
+        GOOS="darwin"
+
+        case "$RUNNER_ARCH" in
+          "X64") GOARCH="amd64" ;;
+          "ARM64") GOARCH="arm64" ;;
+          *) echo "Unsupported architecture: $RUNNER_ARCH"; exit 1 ;;
+        esac
+
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          echo "Fetching latest release version..."
+          VERSION=$(curl -s https://api.github.com/repos/editorlint/editorlint/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "Failed to fetch latest version"
+            exit 1
+          fi
+          echo "Latest version: $VERSION"
+        else
+          VERSION="${{ inputs.version }}"
+          echo "Using specified version: $VERSION"
+        fi
+
+        BINARY_NAME="editorlint"
+        ARCHIVE_NAME="editorlint_v${VERSION}_${GOOS}_${GOARCH}.tar.gz"
+        DOWNLOAD_URL="https://github.com/editorlint/editorlint/releases/download/${VERSION}/${ARCHIVE_NAME}"
+        
+        echo "Downloading $ARCHIVE_NAME..."
+        if ! curl -L -f -o "$ARCHIVE_NAME" "$DOWNLOAD_URL"; then
+          echo "Failed to download $DOWNLOAD_URL"
+          exit 1
+        fi
+
+        tar -xzf "$ARCHIVE_NAME" -C "${{ github.action_path }}" "$BINARY_NAME"
+        chmod +x "${{ github.action_path }}/$BINARY_NAME"
+        echo "Successfully downloaded and extracted $BINARY_NAME"
+
+    - name: Run editorlint
+      id: lint
+      shell: bash
+      run: |
+        cd "${{ github.workspace }}"
+
+        ARGS=("${{ inputs.path }}")
+
+        if [ "${{ inputs.config-file }}" != "" ]; then
+          ARGS+=("--config" "${{ inputs.config-file }}")
+        fi
+
+        if [ "${{ inputs.recurse }}" = "true" ]; then
+          ARGS+=("--recurse")
+        fi
+
+        if [ "${{ inputs.fix }}" = "true" ]; then
+          ARGS+=("--fix")
+        fi
+
+        if [ "${{ inputs.output-format }}" != "default" ]; then
+          ARGS+=("--output" "${{ inputs.output-format }}")
+        fi
+
+        if [ "${{ inputs.ignore-patterns }}" != "" ]; then
+          IFS=',' read -ra PATTERNS <<< "${{ inputs.ignore-patterns }}"
+          for pattern in "${PATTERNS[@]}"; do
+            trimmed_pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            ARGS+=("--ignore" "$trimmed_pattern")
+          done
+        fi
+
+        set +e
+        OUTPUT=$("${{ github.action_path }}/editorlint" "${ARGS[@]}" 2>&1)
+        EXIT_CODE=$?
+        set -e
+
+        echo "$OUTPUT"
+
+        VIOLATIONS_FOUND="false"
+        FILES_PROCESSED="0"
+        FILES_FIXED="0"
+
+        if [ $EXIT_CODE -ne 0 ] && [ "${{ inputs.fix }}" = "false" ]; then
+          VIOLATIONS_FOUND="true"
+        fi
+
+        if echo "$OUTPUT" | grep -q "files processed"; then
+          FILES_PROCESSED=$(echo "$OUTPUT" | grep "files processed" | sed -n 's/.*\([0-9]\+\) files processed.*/\1/p' || echo "0")
+        fi
+
+        if echo "$OUTPUT" | grep -q "files fixed"; then
+          FILES_FIXED=$(echo "$OUTPUT" | grep "files fixed" | sed -n 's/.*\([0-9]\+\) files fixed.*/\1/p' || echo "0")
+          if [ "$FILES_FIXED" != "0" ]; then
+            VIOLATIONS_FOUND="true"
+          fi
+        fi
+
+        echo "violations-found=$VIOLATIONS_FOUND" >> $GITHUB_OUTPUT
+        echo "files-processed=$FILES_PROCESSED" >> $GITHUB_OUTPUT
+        echo "files-fixed=$FILES_FIXED" >> $GITHUB_OUTPUT
+
+        # Handle auto-commit
+        if [ "${{ inputs.auto-commit }}" = "true" ] && [ "${{ inputs.fix }}" = "true" ] && [ "$FILES_FIXED" != "0" ]; then
+          echo "Auto-committing fixes..."
+          git config --local user.name "${{ inputs.git-user-name }}"
+          git config --local user.email "${{ inputs.git-user-email }}"
+
+          if git diff --exit-code > /dev/null 2>&1; then
+            echo "No changes to commit after fixes"
+          else
+            git add .
+            git commit -m "${{ inputs.commit-message }}"
+            git push
+          fi
+        fi
+
+        if [ "${{ inputs.fail-on-violations }}" = "true" ] && [ "$VIOLATIONS_FOUND" = "true" ] && [ "${{ inputs.fix }}" = "false" ]; then
+          echo "Violations found and fail-on-violations is enabled"
+          exit 1
+        fi

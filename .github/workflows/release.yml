@@ -6,7 +6,6 @@ on:
     paths-ignore:
       - 'README.md'
       - 'docs/**'
-      - 'Formula/**'
       - '.github/**'
     tags-ignore:
       - 'v*.*.*'
@@ -28,8 +27,8 @@ jobs:
     name: Semantic Release with Uplift
     runs-on: ubuntu-latest
     outputs:
-      new-release-published: ${{ steps.check.outputs.should-release == 'true' && inputs.dry_run != true }}
-      new-release-version: ${{ steps.check.outputs.version }}
+      new-release-published: ${{ steps.version.outputs.should-release == 'true' && inputs.dry_run != true }}
+      new-release-version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,47 +42,37 @@ jobs:
           install-only: true
           args: --version
 
-      - name: Determine Next Version with Uplift
+      - name: Determine Next Version
         id: version
         if: inputs.force_version == ''
-        run: |
-          # Run uplift and capture output
-          output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
-          echo "$output"
-
-          # Extract version from "identified next semantic version version=X.Y.Z" format
-          version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
-
-          if [ -n "$version" ]; then
-            echo "Detected next version: $version"
-            echo "version=$version" >> $GITHUB_OUTPUT
-          else
-            echo "No version detected from uplift output"
-            echo "version=" >> $GITHUB_OUTPUT
-          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check for New Release
-        id: check
         run: |
           if [ -n "${{ inputs.force_version }}" ]; then
             echo "Manual version specified: ${{ inputs.force_version }}"
             echo "should-release=true" >> $GITHUB_OUTPUT
             echo "version=${{ inputs.force_version }}" >> $GITHUB_OUTPUT
-          elif [ "${{ steps.version.outputs.version }}" ]; then
-            echo "New version determined: ${{ steps.version.outputs.version }}"
-            echo "should-release=true" >> $GITHUB_OUTPUT
-            echo "version=${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
           else
-            echo "No new version to release"
-            echo "should-release=false" >> $GITHUB_OUTPUT
-            echo "version=" >> $GITHUB_OUTPUT
+            # Run uplift and capture output
+            output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
+            echo "$output"
+
+            # Extract version from "identified next semantic version version=X.Y.Z" format
+            version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
+
+            if [ -n "$version" ]; then
+              echo "Detected next version: $version"
+              echo "should-release=true" >> $GITHUB_OUTPUT
+              echo "version=$version" >> $GITHUB_OUTPUT
+            else
+              echo "No version detected from uplift output"
+              echo "version=" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: Create Git Tag with Uplift
         id: uplift
-        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
+        if: steps.version.outputs.should-release == 'true' && inputs.dry_run != true
         uses: gembaadvantage/uplift-action@v2
         with:
           args: tag --no-prefix
@@ -91,7 +80,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create git-cliff config
-        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
+        if: steps.version.outputs.should-release == 'true' && inputs.dry_run != true
         run: |
           cat > cliff.toml << 'EOF'
           [changelog]
@@ -128,7 +117,7 @@ jobs:
 
       - name: Generate Release Notes with git-cliff
         id: changelog
-        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
+        if: steps.version.outputs.should-release == 'true' && inputs.dry_run != true
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
@@ -136,10 +125,10 @@ jobs:
 
       - name: Create GitHub Release
         id: github-release
-        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
+        if: steps.version.outputs.should-release == 'true' && inputs.dry_run != true
         run: |
-          gh release create "${{ steps.check.outputs.version }}" \
-            --title "v${{ steps.check.outputs.version }}" \
+          gh release create "${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.version }}" \
             --notes "${{ steps.changelog.outputs.content }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -211,53 +200,37 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.semantic-release.outputs.new-release-published == 'true'
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.DOBBOBOT_APP_ID }}
-          private-key: ${{ secrets.DOBBOBOT_APP_PRIVATE_KEY }}
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Get release info
-        id: release
+      - name: Get SHA256s from release assets
+        id: checksums
         run: |
           VERSION=${{ needs.semantic-release.outputs.new-release-version }}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Download checksum files for each platform
+          curl -L -o darwin_arm64.sha256 "https://github.com/cdobbyn/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_arm64.tar.gz.sha256"
+          curl -L -o darwin_amd64.sha256 "https://github.com/cdobbyn/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_amd64.tar.gz.sha256"
+          curl -L -o linux_arm64.sha256 "https://github.com/cdobbyn/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_linux_arm64.tar.gz.sha256"
+          curl -L -o linux_amd64.sha256 "https://github.com/cdobbyn/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_linux_amd64.tar.gz.sha256"
+          
+          # Extract SHA256 values (first column)
+          DARWIN_ARM64_SHA256=$(cut -d' ' -f1 darwin_arm64.sha256)
+          DARWIN_AMD64_SHA256=$(cut -d' ' -f1 darwin_amd64.sha256)
+          LINUX_ARM64_SHA256=$(cut -d' ' -f1 linux_arm64.sha256)
+          LINUX_AMD64_SHA256=$(cut -d' ' -f1 linux_amd64.sha256)
+          
+          echo "DARWIN_ARM64_SHA256=$DARWIN_ARM64_SHA256" >> $GITHUB_OUTPUT
+          echo "DARWIN_AMD64_SHA256=$DARWIN_AMD64_SHA256" >> $GITHUB_OUTPUT
+          echo "LINUX_ARM64_SHA256=$LINUX_ARM64_SHA256" >> $GITHUB_OUTPUT
+          echo "LINUX_AMD64_SHA256=$LINUX_AMD64_SHA256" >> $GITHUB_OUTPUT
 
-          # Download the source tarball to calculate SHA256
-          curl -L -o source.tar.gz "https://github.com/cdobbyn/editorlint/archive/refs/tags/${VERSION}.tar.gz"
-          SHA256=$(sha256sum source.tar.gz | cut -d' ' -f1)
-          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
-
-      - name: Update Homebrew formula
+      - name: Trigger Homebrew tap update
         run: |
-          # Check if Formula directory and file exist
-          if [ ! -f "Formula/editorlint.rb" ]; then
-            echo "Formula/editorlint.rb not found, skipping Homebrew update"
-            exit 0
-          fi
-
-          sed -i "s|url \".*\"|url \"https://github.com/cdobbyn/editorlint/archive/refs/tags/${{ steps.release.outputs.VERSION }}.tar.gz\"|" Formula/editorlint.rb
-          sed -i "s|sha256 \".*\"|sha256 \"${{ steps.release.outputs.SHA256 }}\"|" Formula/editorlint.rb
-          sed -i "s|version \".*\"|version \"${{ steps.release.outputs.VERSION }}\"|" Formula/editorlint.rb
-
-      - name: Commit updated formula
-        run: |
-          if git diff --quiet Formula/editorlint.rb; then
-            echo "No changes to formula file"
-            exit 0
-          fi
-
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add Formula/editorlint.rb
-          git commit -m "chore: update Homebrew formula to ${{ steps.release.outputs.VERSION }}"
-          git push
+          gh api repos/cdobbyn/homebrew-taps/dispatches \
+            --method POST \
+            --field event_type="update_editorlint" \
+            --field client_payload[version]="${{ needs.semantic-release.outputs.new-release-version }}" \
+            --field client_payload[darwin_arm64_sha256]="${{ steps.checksums.outputs.DARWIN_ARM64_SHA256 }}" \
+            --field client_payload[darwin_amd64_sha256]="${{ steps.checksums.outputs.DARWIN_AMD64_SHA256 }}" \
+            --field client_payload[linux_arm64_sha256]="${{ steps.checksums.outputs.LINUX_ARM64_SHA256 }}" \
+            --field client_payload[linux_amd64_sha256]="${{ steps.checksums.outputs.LINUX_AMD64_SHA256 }}"
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

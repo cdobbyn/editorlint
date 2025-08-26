@@ -155,9 +155,28 @@ end_of_line = crlf
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+```bash
+brew tap cdobbyn/taps
+brew install editorlint
+```
+
+Or install directly:
+
+```bash
+brew install cdobbyn/taps/editorlint
+```
+
+### Go Install
+
 ```bash
 go install github.com/cdobbyn/editorlint@latest
 ```
+
+### Pre-built Binaries
+
+Download pre-built binaries from the [releases page](https://github.com/cdobbyn/editorlint/releases).
 
 ## Architecture
 

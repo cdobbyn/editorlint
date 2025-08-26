@@ -44,12 +44,12 @@ func NewFormatter(format string, quiet bool) *Formatter {
 		format: OutputFormat(format),
 		quiet:  quiet,
 	}
-	
+
 	// Override format if quiet mode is enabled
 	if quiet {
 		f.format = FormatQuiet
 	}
-	
+
 	return f
 }
 
@@ -81,15 +81,15 @@ func (f *Formatter) formatValidationResults(result *Result) {
 		fmt.Printf("✓ All files pass editorconfig validation\n")
 		return
 	}
-	
+
 	// Group errors by rule
 	errorsByRule := make(map[string][]rules.ValidationError)
 	for _, err := range result.Errors {
 		errorsByRule[err.Rule] = append(errorsByRule[err.Rule], err)
 	}
-	
+
 	fmt.Printf("Found %d validation errors:\n\n", len(result.Errors))
-	
+
 	for rule, errors := range errorsByRule {
 		fmt.Printf("📋 %s (%d files):\n", rule, len(errors))
 		for _, err := range errors {
@@ -97,7 +97,7 @@ func (f *Formatter) formatValidationResults(result *Result) {
 		}
 		fmt.Println()
 	}
-	
+
 	fmt.Printf("To fix these errors automatically, run with --fix flag\n")
 }
 
@@ -118,64 +118,64 @@ func (f *Formatter) formatTabular(result *Result) {
 		fmt.Printf("✓ All files pass editorconfig validation\n")
 		return
 	}
-	
+
 	if result.Mode == "fix" {
 		f.formatFixResults(result)
 		return
 	}
-	
+
 	// Group errors by file
 	errorsByFile := make(map[string][]rules.ValidationError)
 	allRules := make(map[string]bool)
-	
+
 	for _, err := range result.Errors {
 		errorsByFile[err.FilePath] = append(errorsByFile[err.FilePath], err)
 		allRules[err.Rule] = true
 	}
-	
+
 	// Sort rules for consistent output
 	var ruleList []string
 	for rule := range allRules {
 		ruleList = append(ruleList, rule)
 	}
 	sort.Strings(ruleList)
-	
+
 	// Create table
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	
+
 	// Header
 	header := []string{"File"}
 	header = append(header, ruleList...)
 	fmt.Fprintln(w, strings.Join(header, "\t"))
-	
+
 	// Separator line
 	separator := make([]string, len(header))
 	for i := range separator {
 		separator[i] = "---"
 	}
 	fmt.Fprintln(w, strings.Join(separator, "\t"))
-	
+
 	// Data rows - format paths for better display
 	var files []string
 	for file := range errorsByFile {
 		files = append(files, file)
 	}
 	sort.Strings(files)
-	
+
 	// Format paths for tabular display
 	displayPaths := f.formatPathsForTable(files)
-	
+
 	for i, file := range files {
 		displayPath := displayPaths[i]
 		row := []string{displayPath}
 		fileErrors := errorsByFile[file]
-		
+
 		// Create map of rules for this file
 		fileRules := make(map[string]string)
 		for _, err := range fileErrors {
 			fileRules[err.Rule] = "❌"
 		}
-		
+
 		// Add status for each rule
 		for _, rule := range ruleList {
 			if status, exists := fileRules[rule]; exists {
@@ -184,10 +184,10 @@ func (f *Formatter) formatTabular(result *Result) {
 				row = append(row, "✅")
 			}
 		}
-		
+
 		fmt.Fprintln(w, strings.Join(row, "\t"))
 	}
-	
+
 	w.Flush()
 	fmt.Printf("\nFound %d validation errors in %d files\n", len(result.Errors), len(errorsByFile))
 }
@@ -197,13 +197,13 @@ func (f *Formatter) formatPathsForTable(files []string) []string {
 	if len(files) == 0 {
 		return files
 	}
-	
+
 	// Get working directory for relative path calculation
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = ""
 	}
-	
+
 	// Convert to relative paths where possible
 	relativePaths := make([]string, len(files))
 	for i, file := range files {
@@ -217,10 +217,10 @@ func (f *Formatter) formatPathsForTable(files []string) []string {
 			relativePaths[i] = file
 		}
 	}
-	
+
 	// Calculate max reasonable column width (40% of terminal width, min 20, max 60)
 	maxWidth := f.getMaxPathWidth()
-	
+
 	// Check if any paths exceed the max width
 	needsTruncation := false
 	for _, path := range relativePaths {
@@ -229,12 +229,12 @@ func (f *Formatter) formatPathsForTable(files []string) []string {
 			break
 		}
 	}
-	
+
 	// If truncation is needed, apply smart shortening
 	if needsTruncation {
 		return f.shortenPaths(relativePaths, maxWidth)
 	}
-	
+
 	return relativePaths
 }
 
@@ -251,20 +251,20 @@ func (f *Formatter) getMaxPathWidth() int {
 // shortenPaths intelligently shortens file paths to fit in the specified width
 func (f *Formatter) shortenPaths(paths []string, maxWidth int) []string {
 	shortened := make([]string, len(paths))
-	
+
 	for i, path := range paths {
 		if len(path) <= maxWidth {
 			shortened[i] = path
 			continue
 		}
-		
+
 		// Strategy 1: Try showing just the filename if directory structure is deep
 		filename := filepath.Base(path)
 		if len(filename) <= maxWidth-3 { // -3 for ".../"
 			shortened[i] = ".../" + filename
 			continue
 		}
-		
+
 		// Strategy 2: Truncate in the middle, preserving start and end
 		if maxWidth > 10 {
 			start := path[:maxWidth/2-2]
@@ -275,7 +275,7 @@ func (f *Formatter) shortenPaths(paths []string, maxWidth int) []string {
 			shortened[i] = path[:maxWidth-3] + "..."
 		}
 	}
-	
+
 	return shortened
 }
 
@@ -286,7 +286,7 @@ func (f *Formatter) formatJSON(result *Result) {
 		Rule     string `json:"rule"`
 		Message  string `json:"message"`
 	}
-	
+
 	type jsonResult struct {
 		Success    bool        `json:"success"`
 		Mode       string      `json:"mode"`
@@ -294,7 +294,7 @@ func (f *Formatter) formatJSON(result *Result) {
 		Errors     []jsonError `json:"errors,omitempty"`
 		FixedFiles []string    `json:"fixed_files,omitempty"`
 	}
-	
+
 	jsonErrors := make([]jsonError, len(result.Errors))
 	for i, err := range result.Errors {
 		jsonErrors[i] = jsonError{
@@ -303,7 +303,7 @@ func (f *Formatter) formatJSON(result *Result) {
 			Message:  err.Message,
 		}
 	}
-	
+
 	output := jsonResult{
 		Success:    result.Success,
 		Mode:       result.Mode,
@@ -311,7 +311,7 @@ func (f *Formatter) formatJSON(result *Result) {
 		Errors:     jsonErrors,
 		FixedFiles: result.FixedFiles,
 	}
-	
+
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	encoder.Encode(output)

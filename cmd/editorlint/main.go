@@ -24,7 +24,7 @@ var rootCmd = &cobra.Command{
   Args:  cobra.ExactArgs(1),
   Run: func(cmd *cobra.Command, args []string) {
     target := args[0]
-    
+
     // Create validator with config
     v := validator.New(validator.Config{
       CustomConfigPath: configFlag,
@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
       Workers:          workersFlag,
       Quiet:            quietFlag,
     })
-    
+
     err := v.ValidateTarget(target)
     if err != nil {
       fmt.Fprintf(os.Stderr, "Error: %v\n", err)

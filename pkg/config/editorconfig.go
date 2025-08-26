@@ -49,18 +49,18 @@ func FindEditorConfigsWithCustomConfig(targetPath, customConfigPath string) ([]*
     if err != nil {
       return nil, fmt.Errorf("failed to get absolute path for config file: %w", err)
     }
-    
+
     config, err := ParseEditorConfig(absConfigPath)
     if err != nil {
       return nil, fmt.Errorf("failed to parse custom config %s: %w", absConfigPath, err)
     }
-    
+
     return []*EditorConfig{config}, nil
   }
-  
+
   // Original hierarchical search logic
   var configs []*EditorConfig
-  
+
   dir := filepath.Dir(targetPath)
   if !filepath.IsAbs(dir) {
     absDir, err := filepath.Abs(dir)
@@ -69,23 +69,23 @@ func FindEditorConfigsWithCustomConfig(targetPath, customConfigPath string) ([]*
     }
     dir = absDir
   }
-  
+
   for {
     configPath := filepath.Join(dir, ".editorconfig")
-    
+
     if _, err := os.Stat(configPath); err == nil {
       config, err := ParseEditorConfig(configPath)
       if err != nil {
         return nil, fmt.Errorf("failed to parse %s: %w", configPath, err)
       }
-      
+
       configs = append([]*EditorConfig{config}, configs...) // Prepend to maintain parent->child order
-      
+
       if config.Root {
         break
       }
     }
-    
+
     parent := filepath.Dir(dir)
     if parent == dir {
       // Reached filesystem root
@@ -93,7 +93,7 @@ func FindEditorConfigsWithCustomConfig(targetPath, customConfigPath string) ([]*
     }
     dir = parent
   }
-  
+
   return configs, nil
 }
 
@@ -104,21 +104,21 @@ func ParseEditorConfig(filePath string) (*EditorConfig, error) {
     return nil, err
   }
   defer file.Close()
-  
+
   config := &EditorConfig{FilePath: filePath}
   scanner := bufio.NewScanner(file)
-  
+
   var currentSection *Section
   inHeaderSection := true
-  
+
   for scanner.Scan() {
     line := strings.TrimSpace(scanner.Text())
-    
+
     // Skip empty lines and comments
     if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
       continue
     }
-    
+
     // Check for section headers [pattern]
     if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
       pattern := line[1 : len(line)-1]
@@ -130,50 +130,50 @@ func ParseEditorConfig(filePath string) (*EditorConfig, error) {
       inHeaderSection = false
       continue
     }
-    
+
     // Parse key = value pairs
     if strings.Contains(line, "=") {
       parts := strings.SplitN(line, "=", 2)
       if len(parts) != 2 {
         continue
       }
-      
+
       key := strings.TrimSpace(parts[0])
       value := strings.TrimSpace(parts[1])
-      
+
       // Handle root property in header section
       if inHeaderSection && key == "root" {
         config.Root = strings.ToLower(value) == "true"
         continue
       }
-      
+
       // Add property to current section
       if currentSection != nil {
         currentSection.Properties[key] = value
       }
     }
   }
-  
+
   return config, scanner.Err()
 }
 
 // ResolveConfigForFile resolves the final configuration for a specific file
 func ResolveConfigForFile(filePath string, configs []*EditorConfig) (*ResolvedConfig, error) {
   resolved := &ResolvedConfig{}
-  
+
   for _, config := range configs {
     for _, section := range config.Sections {
       matches, err := matchesPattern(filePath, section.Pattern, config.FilePath)
       if err != nil {
         return nil, err
       }
-      
+
       if matches {
         applyProperties(resolved, section.Properties)
       }
     }
   }
-  
+
   return resolved, nil
 }
 
@@ -185,16 +185,16 @@ func matchesPattern(filePath, pattern, configPath string) (bool, error) {
   if err != nil {
     return false, err
   }
-  
+
   // Normalize path separators to forward slashes
   relPath = filepath.ToSlash(relPath)
-  
+
   // Convert editorconfig pattern to regex
   regexPattern, err := ConvertPatternToRegex(pattern)
   if err != nil {
     return false, err
   }
-  
+
   matched, err := regexp.MatchString(regexPattern, relPath)
   return matched, err
 }
@@ -203,10 +203,10 @@ func matchesPattern(filePath, pattern, configPath string) (bool, error) {
 func ConvertPatternToRegex(pattern string) (string, error) {
   // Escape regex special characters except our glob characters
   pattern = regexp.QuoteMeta(pattern)
-  
+
   // Convert escaped glob patterns back to regex equivalents
   pattern = strings.ReplaceAll(pattern, "\\*\\*", ".*")     // ** matches anything including path separators
-  
+
   // Special case: if pattern is just "*", treat it like "**" for compatibility
   // This matches common EditorConfig usage where [*] is expected to match all files
   if pattern == "\\*" {
@@ -215,12 +215,12 @@ func ConvertPatternToRegex(pattern string) (string, error) {
     pattern = strings.ReplaceAll(pattern, "\\*", "[^/]*")    // * matches anything except path separators
   }
   pattern = strings.ReplaceAll(pattern, "\\?", ".")        // ? matches any single character
-  
+
   // Handle character classes [abc] and [!abc]
   pattern = strings.ReplaceAll(pattern, "\\[!", "[^")
   pattern = strings.ReplaceAll(pattern, "\\[", "[")
   pattern = strings.ReplaceAll(pattern, "\\]", "]")
-  
+
   // Handle brace expansion {js,ts,jsx}
   braceRegex := regexp.MustCompile(`\\{([^}]+)\\}`)
   pattern = braceRegex.ReplaceAllStringFunc(pattern, func(match string) string {
@@ -233,7 +233,7 @@ func ConvertPatternToRegex(pattern string) (string, error) {
     }
     return "(" + strings.Join(parts, "|") + ")"
   })
-  
+
   // Anchor the pattern to match the full path
   return "^" + pattern + "$", nil
 }

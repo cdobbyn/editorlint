@@ -1,0 +1,41 @@
+name: Auto-fix EditorConfig
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run editorlint auto-fix
+        uses: ./
+        with:
+          path: '.'
+          recurse: true
+          fix: true
+          auto-commit: true
+          commit-message: 'style: auto-fix editorconfig violations'
+          fail-on-violations: false
+        id: autofix
+
+      - name: Summary
+        run: |
+          echo "Files processed: ${{ steps.autofix.outputs.files-processed }}"
+          echo "Files fixed: ${{ steps.autofix.outputs.files-fixed }}"
+          if [ "${{ steps.autofix.outputs.files-fixed }}" != "0" ]; then
+            echo "✅ Fixed ${{ steps.autofix.outputs.files-fixed }} files with editorconfig violations"
+          else
+            echo "✅ No editorconfig violations found"
+          fi

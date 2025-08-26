@@ -44,7 +44,7 @@ jobs:
             UPLIFT_VERSION=$(curl -s https://api.github.com/repos/gembaadvantage/uplift/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
             curl -L "https://github.com/gembaadvantage/uplift/releases/download/${UPLIFT_VERSION}/uplift_${UPLIFT_VERSION#v}_linux-x86_64.tar.gz" | tar xz
             sudo mv uplift /usr/local/bin/
-            
+
             # Check if any tags exist
             if ! git tag -l | grep -q .; then
               echo "No existing tags found, this is the first release"
@@ -60,16 +60,16 @@ jobs:
               # Get next semantic version using uplift
               output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
               version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
-              
+
               if [ -z "$version" ]; then
                 echo "No version bump needed based on commits"
                 exit 0
               fi
-              
+
               echo "Next version determined: $version"
             fi
           fi
-          
+
           echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
@@ -128,9 +128,9 @@ jobs:
           else
             BINARY_NAME="editorlint"
           fi
-          
+
           go build -ldflags="-s -w" -o "dist/${BINARY_NAME}" cmd/editorlint/main.go
-          
+
           # Create archive
           ARCHIVE_NAME="editorlint_v${VERSION}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = "windows" ]; then

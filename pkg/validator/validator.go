@@ -5,7 +5,7 @@
 // - Resolving configuration for specific files
 // - Applying validation rules and fix functions
 // - Handling both single files and directory trees
-// 
+//
 // The Validator type is the main entry point that coordinates between the config
 // resolution and rules application.
 package validator
@@ -28,22 +28,22 @@ type Config struct {
   // CustomConfigPath specifies an alternative .editorconfig file to use instead
   // of searching hierarchically. If empty, uses standard EditorConfig discovery.
   CustomConfigPath string
-  
+
   // Recursive indicates whether to process files in subdirectories when
   // validating a directory target.
   Recursive        bool
-  
+
   // Fix indicates whether to automatically fix validation errors instead
   // of just reporting them.
   Fix              bool
-  
+
   // OutputFormat specifies how to format output: default, tabular, json, quiet
   OutputFormat     string
-  
+
   // Workers specifies the number of parallel workers for file processing.
   // If 0, uses runtime.NumCPU().
   Workers          int
-  
+
   // Quiet enables minimal output mode
   Quiet            bool
 }
@@ -63,9 +63,9 @@ func New(cfg Config) *Validator {
   if workers <= 0 {
     workers = runtime.NumCPU()
   }
-  
+
   formatter := output.NewFormatter(cfg.OutputFormat, cfg.Quiet)
-  
+
   return &Validator{
     config:    cfg,
     formatter: formatter,
@@ -74,7 +74,7 @@ func New(cfg Config) *Validator {
 }
 
 // ValidateTarget validates a target file or directory according to EditorConfig rules.
-// 
+//
 // If target is a file, validates that single file. If target is a directory,
 // validates all eligible files in the directory (recursively if Recursive is true).
 // When Fix is true, automatically fixes validation errors instead of reporting them.
@@ -87,7 +87,7 @@ func (v *Validator) ValidateTarget(target string) error {
   if err != nil {
     return fmt.Errorf("cannot access target: %w", err)
   }
-  
+
   if info.IsDir() {
     return v.validateDirectory(target)
   } else {
@@ -102,7 +102,7 @@ func (v *Validator) validateDirectory(directory string) error {
       return err
     }
   }
-  
+
   // Print progress unless in quiet mode
   if !v.config.Quiet {
     mode := "Validating"
@@ -111,21 +111,21 @@ func (v *Validator) validateDirectory(directory string) error {
     }
     fmt.Printf("%s directory: %s (recursive: %v)\n", mode, directory, v.config.Recursive)
   }
-  
+
   if v.config.Fix {
     // Fix mode: fix all validation errors
     fixed, totalFiles, err := v.fixFilesParallel(directory)
     if err != nil {
       return err
     }
-    
+
     result := &output.Result{
       FixedFiles: fixed,
       TotalFiles: totalFiles,
       Success:    len(fixed) == 0, // Success if no fixes were needed
       Mode:       "fix",
     }
-    
+
     v.formatter.FormatResults(result)
     return nil
   } else {
@@ -134,20 +134,20 @@ func (v *Validator) validateDirectory(directory string) error {
     if err != nil {
       return err
     }
-    
+
     result := &output.Result{
       Errors:     errors,
       TotalFiles: totalFiles,
       Success:    len(errors) == 0,
       Mode:       "validate",
     }
-    
+
     v.formatter.FormatResults(result)
-    
+
     if len(errors) > 0 {
       return fmt.Errorf("validation failed with %d errors", len(errors))
     }
-    
+
     return nil
   }
 }
@@ -161,26 +161,26 @@ func (v *Validator) validateSingleFile(filePath string) error {
     }
     fmt.Printf("%s file: %s\n", mode, filePath)
   }
-  
+
   if v.config.Fix {
     // Fix mode: fix validation errors in single file
     fixed, err := v.fixSingleFile(filePath)
     if err != nil {
       return err
     }
-    
+
     var fixedFiles []string
     if fixed {
       fixedFiles = []string{filePath}
     }
-    
+
     result := &output.Result{
       FixedFiles: fixedFiles,
       TotalFiles: 1,
       Success:    !fixed, // Success if no fixes were needed
       Mode:       "fix",
     }
-    
+
     v.formatter.FormatResults(result)
     return nil
   } else {
@@ -189,20 +189,20 @@ func (v *Validator) validateSingleFile(filePath string) error {
     if err != nil {
       return err
     }
-    
+
     result := &output.Result{
       Errors:     errors,
       TotalFiles: 1,
       Success:    len(errors) == 0,
       Mode:       "validate",
     }
-    
+
     v.formatter.FormatResults(result)
-    
+
     if len(errors) > 0 {
       return fmt.Errorf("validation failed with %d errors", len(errors))
     }
-    
+
     return nil
   }
 }
@@ -210,12 +210,12 @@ func (v *Validator) validateSingleFile(filePath string) error {
 // validateFiles validates all files in the given directory against editorconfig rules
 func (v *Validator) validateFiles(directory string) ([]rules.ValidationError, error) {
   var errors []rules.ValidationError
-  
+
   walkErr := filepath.Walk(directory, func(path string, info os.FileInfo, walkErr error) error {
     if walkErr != nil {
       return walkErr
     }
-    
+
     // Skip directories
     if info.IsDir() {
       // If not recursive, skip subdirectories
@@ -224,67 +224,67 @@ func (v *Validator) validateFiles(directory string) ([]rules.ValidationError, er
       }
       return nil
     }
-    
+
     // Skip .editorconfig files themselves
     if info.Name() == ".editorconfig" {
       return nil
     }
-    
+
     // Skip hidden files and directories (optional - could be configurable)
     if strings.HasPrefix(info.Name(), ".") {
       return nil
     }
-    
+
     // Skip binary files and executable files
     if isBinaryFile(path, info) {
       return nil
     }
-    
+
     // Convert to absolute path for config resolution
     absPath, err := filepath.Abs(path)
     if err != nil {
       return fmt.Errorf("failed to get absolute path for %s: %w", path, err)
     }
-    
+
     // Find applicable editorconfig files for this file
     var configs []*config.EditorConfig
     var configErr error
-    
+
     if v.config.CustomConfigPath != "" {
       configs, configErr = config.FindEditorConfigsWithCustomConfig(absPath, v.config.CustomConfigPath)
     } else {
       configs, configErr = config.FindEditorConfigs(absPath)
     }
-    
+
     if configErr != nil {
       return fmt.Errorf("failed to find editorconfig for %s: %w", path, configErr)
     }
-    
+
     if len(configs) == 0 {
       // No .editorconfig found
       return fmt.Errorf(".editorconfig file not found in directory hierarchy for %s", path)
     }
-    
+
     // Resolve configuration for this specific file
     resolvedConfig, err := config.ResolveConfigForFile(absPath, configs)
     if err != nil {
       return fmt.Errorf("failed to resolve config for %s: %w", path, err)
     }
-    
+
     // Validate the file against the resolved configuration (use original path for error messages)
     fileErrors := v.validateFile(path, resolvedConfig)
     errors = append(errors, fileErrors...)
-    
+
     return nil
   })
-  
+
   return errors, walkErr
 }
 
 // validateFile validates a single file against its resolved editorconfig
 func (v *Validator) validateFile(filePath string, cfg *config.ResolvedConfig) []rules.ValidationError {
   var errors []rules.ValidationError
-  
+
   // Read the file
   content, err := os.ReadFile(filePath)
   if err != nil {
@@ -295,16 +295,16 @@ func (v *Validator) validateFile(filePath string, cfg *config.ResolvedConfig) []
     })
     return errors
   }
-  
+
   // Run all validation checks
   validators := rules.GetAllValidators()
-  
+
   for _, validator := range validators {
     if err := validator(filePath, content, cfg); err != nil {
       errors = append(errors, *err)
     }
   }
-  
+
   return errors
 }
 
@@ -315,30 +315,30 @@ func (v *Validator) validateSingleFileErrors(filePath string) ([]rules.Validatio
   if err != nil {
     return nil, fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
   }
-  
+
   // Find applicable editorconfig files for this file
   var configs []*config.EditorConfig
-  
+
   if v.config.CustomConfigPath != "" {
     configs, err = config.FindEditorConfigsWithCustomConfig(absPath, v.config.CustomConfigPath)
   } else {
     configs, err = config.FindEditorConfigs(absPath)
   }
-  
+
   if err != nil {
     return nil, fmt.Errorf("failed to find editorconfig for %s: %w", filePath, err)
   }
-  
+
   if len(configs) == 0 {
     return nil, fmt.Errorf(".editorconfig file not found in directory hierarchy for %s", filePath)
   }
-  
+
   // Resolve configuration for this specific file
   resolvedConfig, err := config.ResolveConfigForFile(absPath, configs)
   if err != nil {
     return nil, fmt.Errorf("failed to resolve config for %s: %w", filePath, err)
   }
-  
+
   // Validate the file against the resolved configuration
   errors := v.validateFile(filePath, resolvedConfig)
   return errors, nil
@@ -350,40 +350,40 @@ func (v *Validator) fixSingleFile(filePath string) (bool, error) {
   if err != nil {
     return false, fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
   }
-  
+
   // Find applicable editorconfig files for this file
   var configs []*config.EditorConfig
-  
+
   if v.config.CustomConfigPath != "" {
     configs, err = config.FindEditorConfigsWithCustomConfig(absPath, v.config.CustomConfigPath)
   } else {
     configs, err = config.FindEditorConfigs(absPath)
   }
-  
+
   if err != nil {
     return false, fmt.Errorf("failed to find editorconfig for %s: %w", filePath, err)
   }
-  
+
   if len(configs) == 0 {
     return false, fmt.Errorf(".editorconfig file not found in directory hierarchy for %s", filePath)
   }
-  
+
   // Resolve configuration for this specific file
   resolvedConfig, err := config.ResolveConfigForFile(absPath, configs)
   if err != nil {
     return false, fmt.Errorf("failed to resolve config for %s: %w", filePath, err)
   }
-  
+
   // Read the file
   content, err := os.ReadFile(filePath)
   if err != nil {
     return false, fmt.Errorf("could not read file %s: %w", filePath, err)
   }
-  
+
   // Apply all fixers
   fixers := rules.GetAllFixers()
   modified := false
-  
+
   for _, fixer := range fixers {
     newContent, changed, err := fixer(filePath, content, resolvedConfig)
     if err != nil {
@@ -394,7 +394,7 @@ func (v *Validator) fixSingleFile(filePath string) (bool, error) {
       modified = true
     }
   }
-  
+
   // Write back to file if modified
   if modified {
     err = os.WriteFile(filePath, content, 0644)
@@ -402,18 +402,18 @@ func (v *Validator) fixSingleFile(filePath string) (bool, error) {
       return false, fmt.Errorf("failed to write fixed file %s: %w", filePath, err)
     }
   }
-  
+
   return modified, nil
 }
 
 func (v *Validator) fixFiles(directory string) ([]string, error) {
   var fixedFiles []string
-  
+
   walkErr := filepath.Walk(directory, func(path string, info os.FileInfo, walkErr error) error {
     if walkErr != nil {
       return walkErr
     }
-    
+
     // Skip directories
     if info.IsDir() {
       // If not recursive, skip subdirectories
@@ -422,35 +422,35 @@ func (v *Validator) fixFiles(directory string) ([]string, error) {
       }
       return nil
     }
-    
+
     // Skip .editorconfig files themselves
     if info.Name() == ".editorconfig" {
       return nil
     }
-    
+
     // Skip hidden files and directories (optional - could be configurable)
     if strings.HasPrefix(info.Name(), ".") {
       return nil
     }
-    
+
     // Skip binary files and executable files
     if isBinaryFile(path, info) {
       return nil
     }
-    
+
     // Try to fix the file
     fixed, err := v.fixSingleFile(path)
     if err != nil {
       return fmt.Errorf("failed to fix %s: %w", path, err)
     }
-    
+
     if fixed {
       fixedFiles = append(fixedFiles, path)
     }
-    
+
     return nil
   })
-  
+
   return fixedFiles, walkErr
 }
 
@@ -462,21 +462,21 @@ func (v *Validator) checkForEditorConfig(directory string) error {
     }
     return nil
   }
-  
+
   // Original logic for hierarchical search
   absDir, err := filepath.Abs(directory)
   if err != nil {
     return fmt.Errorf("failed to get absolute path: %w", err)
   }
-  
+
   dir := absDir
   for {
     configPath := filepath.Join(dir, ".editorconfig")
-    
+
     if _, err := os.Stat(configPath); err == nil {
       return nil // Found .editorconfig
     }
-    
+
     parent := filepath.Dir(dir)
     if parent == dir {
       // Reached filesystem root
@@ -484,19 +484,19 @@ func (v *Validator) checkForEditorConfig(directory string) error {
     }
     dir = parent
   }
-  
+
   return fmt.Errorf(".editorconfig file not found in directory hierarchy starting from %s", directory)
 }
 
 // isBinaryFile checks if a file should be skipped (binary or executable)
 func isBinaryFile(filePath string, info os.FileInfo) bool {
   ext := strings.ToLower(filepath.Ext(filePath))
-  
+
   // Skip executable files with no extension
   if ext == "" && info.Mode()&0111 != 0 {
     return true
   }
-  
+
   // Only process known text file extensions
   textExtensions := map[string]bool{
     ".go":   true, ".py":   true, ".js":   true, ".ts":   true,
@@ -510,29 +510,29 @@ func isBinaryFile(filePath string, info os.FileInfo) bool {
     ".tex":  true, ".lua":  true, ".vim":  true, ".ini":  true,
     ".conf": true, ".cfg":  true, ".toml": true, ".lock": true,
   }
-  
+
   // If it has a known text extension, it's not binary
   if textExtensions[ext] {
     return false
   }
-  
+
   // If it has no extension or unknown extension, check for null bytes
   file, err := os.Open(filePath)
   if err != nil {
     return true // If we can't read it, skip it
   }
   defer file.Close()
-  
+
   buffer := make([]byte, 512)
   n, _ := file.Read(buffer)
-  
+
   // Check for null bytes (indicates binary content)
   for i := 0; i < n; i++ {
     if buffer[i] == 0 {
       return true
     }
   }
-  
+
   return false
 }
 
@@ -549,15 +549,15 @@ func (v *Validator) validateFilesParallel(directory string) ([]rules.ValidationE
   if err != nil {
     return nil, 0, err
   }
-  
+
   if len(files) == 0 {
     return []rules.ValidationError{}, 0, nil
   }
-  
+
   // Create channels for job distribution and result collection
   jobs := make(chan FileJob, len(files))
   results := make(chan []rules.ValidationError, len(files))
-  
+
   // Start worker goroutines
   var wg sync.WaitGroup
   for i := 0; i < v.workers; i++ {
@@ -570,7 +570,7 @@ func (v *Validator) validateFilesParallel(directory string) ([]rules.ValidationE
       }
     }()
   }
-  
+
   // Send jobs to workers
   go func() {
     defer close(jobs)
@@ -578,19 +578,19 @@ func (v *Validator) validateFilesParallel(directory string) ([]rules.ValidationE
       jobs <- file
     }
   }()
-  
+
   // Wait for all workers to complete
   go func() {
     wg.Wait()
     close(results)
   }()
-  
+
   // Collect results
   var allErrors []rules.ValidationError
   for errors := range results {
     allErrors = append(allErrors, errors...)
   }
-  
+
   return allErrors, len(files), nil
 }
 
@@ -601,15 +601,15 @@ func (v *Validator) fixFilesParallel(directory string) ([]string, int, error) {
   if err != nil {
     return nil, 0, err
   }
-  
+
   if len(files) == 0 {
     return []string{}, 0, nil
   }
-  
+
   // Create channels for job distribution and result collection
   jobs := make(chan FileJob, len(files))
   results := make(chan string, len(files)) // Empty string means no fix needed
-  
+
   // Start worker goroutines
   var wg sync.WaitGroup
   for i := 0; i < v.workers; i++ {
@@ -630,7 +630,7 @@ func (v *Validator) fixFilesParallel(directory string) ([]string, int, error) {
       }
     }()
   }
-  
+
   // Send jobs to workers
   go func() {
     defer close(jobs)
@@ -638,13 +638,13 @@ func (v *Validator) fixFilesParallel(directory string) ([]string, int, error) {
       jobs <- file
     }
   }()
-  
+
   // Wait for all workers to complete
   go func() {
     wg.Wait()
     close(results)
   }()
-  
+
   // Collect results
   var fixedFiles []string
   for result := range results {
@@ -652,19 +652,19 @@ func (v *Validator) fixFilesParallel(directory string) ([]string, int, error) {
       fixedFiles = append(fixedFiles, result)
     }
   }
-  
+
   return fixedFiles, len(files), nil
 }
 
 // collectFiles gathers all files that should be processed
 func (v *Validator) collectFiles(directory string) ([]FileJob, error) {
   var files []FileJob
-  
+
   err := filepath.Walk(directory, func(path string, info os.FileInfo, walkErr error) error {
     if walkErr != nil {
       return walkErr
     }
-    
+
     // Skip directories
     if info.IsDir() {
       // If not recursive, skip subdirectories
@@ -673,26 +673,26 @@ func (v *Validator) collectFiles(directory string) ([]FileJob, error) {
       }
       return nil
     }
-    
+
     // Skip .editorconfig files themselves
     if info.Name() == ".editorconfig" {
       return nil
     }
-    
+
     // Skip hidden files and directories
     if strings.HasPrefix(info.Name(), ".") {
       return nil
     }
-    
+
     // Skip binary files and executable files
     if isBinaryFile(path, info) {
       return nil
     }
-    
+
     files = append(files, FileJob{Path: path, Info: info})
     return nil
   })
-  
+
   return files, err
 }
 

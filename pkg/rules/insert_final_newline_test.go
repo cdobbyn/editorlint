@@ -2,7 +2,7 @@ package rules
 
 import (
   "testing"
-  
+
   "github.com/cdobbyn/editorlint/pkg/config"
 )
 
@@ -57,20 +57,20 @@ func TestValidateInsertFinalNewline(t *testing.T) {
       wantError: false,
     },
   }
-  
+
   for _, tt := range tests {
     t.Run(tt.name, func(t *testing.T) {
       resolvedConfig := &config.ResolvedConfig{
         EndOfLine: tt.endOfLine,
         InsertFinalNewline: &tt.insertFinalNewline,
       }
-      
+
       err := ValidateInsertFinalNewline("test.go", []byte(tt.content), resolvedConfig)
-      
+
       if tt.wantError && err == nil {
         t.Error("Expected validation error, but got none")
       }
-      
+
       if !tt.wantError && err != nil {
         t.Errorf("Expected no validation error, but got: %v", err)
       }
@@ -120,23 +120,23 @@ func TestFixInsertFinalNewline(t *testing.T) {
       expectFixed: false,
     },
   }
-  
+
   for _, tt := range tests {
     t.Run(tt.name, func(t *testing.T) {
       resolvedConfig := &config.ResolvedConfig{
         EndOfLine: tt.endOfLine,
         InsertFinalNewline: &tt.insertFinalNewline,
       }
-      
+
       newContent, fixed, err := FixInsertFinalNewline("test.go", []byte(tt.content), resolvedConfig)
       if err != nil {
         t.Fatal(err)
       }
-      
+
       if fixed != tt.expectFixed {
         t.Errorf("Expected fixed=%v, got %v", tt.expectFixed, fixed)
       }
-      
+
       if string(newContent) != tt.expectedContent {
         t.Errorf("Expected content %q, got %q", tt.expectedContent, string(newContent))
       }

@@ -19,7 +19,7 @@ class Editorlint < Formula
     # Create a test .editorconfig file
     (testpath/".editorconfig").write <<~EOS
       root = true
-      
+
       [*]
       insert_final_newline = true
       trim_trailing_whitespace = true
@@ -35,7 +35,7 @@ class Editorlint < Formula
 
     # Test the fix functionality
     system bin/"editorlint", "--fix", "test.txt"
-    
+
     # Verify the file was fixed
     fixed_content = File.read(testpath/"test.txt")
     assert_equal "test with trailing spaces\n", fixed_content

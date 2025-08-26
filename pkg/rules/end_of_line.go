@@ -3,7 +3,7 @@ package rules
 import (
   "bytes"
   "fmt"
-  
+
   "github.com/cdobbyn/editorlint/pkg/config"
 )
 
@@ -13,15 +13,15 @@ func ValidateEndOfLine(filePath string, content []byte, config *config.ResolvedC
   if config.EndOfLine == "" {
     return nil
   }
-  
+
   if len(content) == 0 {
     return nil // Empty files are fine
   }
-  
+
   // Define expected line ending
   var expectedEnding []byte
   var expectedName string
-  
+
   switch config.EndOfLine {
   case "lf":
     expectedEnding = []byte("\n")
@@ -35,10 +35,10 @@ func ValidateEndOfLine(filePath string, content []byte, config *config.ResolvedC
   default:
     return nil // Unknown line ending style
   }
-  
+
   // Find all line endings in the file
   lineEndings := findLineEndings(content)
-  
+
   for _, ending := range lineEndings {
     if !bytes.Equal(ending.bytes, expectedEnding) {
       return &ValidationError{
@@ -48,7 +48,7 @@ func ValidateEndOfLine(filePath string, content []byte, config *config.ResolvedC
       }
     }
   }
-  
+
   return nil
 }
 
@@ -58,14 +58,14 @@ func FixEndOfLine(filePath string, content []byte, config *config.ResolvedConfig
   if config.EndOfLine == "" {
     return content, false, nil
   }
-  
+
   if len(content) == 0 {
     return content, false, nil
   }
-  
+
   // Define target line ending
   var targetEnding []byte
-  
+
   switch config.EndOfLine {
   case "lf":
     targetEnding = []byte("\n")
@@ -76,13 +76,13 @@ func FixEndOfLine(filePath string, content []byte, config *config.ResolvedConfig
   default:
     return content, false, nil // Unknown line ending style
   }
-  
+
   // Convert all line endings to the target style
   result := normalizeLineEndings(content, targetEnding)
-  
+
   // Check if any changes were made
   changed := !bytes.Equal(content, result)
-  
+
   return result, changed, nil
 }
 
@@ -97,7 +97,7 @@ type LineEnding struct {
 func findLineEndings(content []byte) []LineEnding {
   var endings []LineEnding
   lineNum := 1
-  
+
   for i := 0; i < len(content); i++ {
     if content[i] == '\r' {
       if i+1 < len(content) && content[i+1] == '\n' {
@@ -127,7 +127,7 @@ func findLineEndings(content []byte) []LineEnding {
       lineNum++
     }
   }
-  
+
   return endings
 }
 
@@ -138,12 +138,12 @@ func normalizeLineEndings(content []byte, targetEnding []byte) []byte {
   normalized := bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n"))
   // Replace remaining CR with LF
   normalized = bytes.ReplaceAll(normalized, []byte("\r"), []byte("\n"))
-  
+
   // If target is LF, we're done
   if bytes.Equal(targetEnding, []byte("\n")) {
     return normalized
   }
-  
+
   // Convert LF to target ending
   result := bytes.ReplaceAll(normalized, []byte("\n"), targetEnding)
   return result

@@ -1,5 +1,5 @@
 // Package rules provides validation and fixing functions for EditorConfig rules.
-// 
+//
 // This package implements various EditorConfig properties validation and their
 // corresponding fix functions. Each rule is implemented as a ValidatorFunc and FixerFunc
 // that can be applied to file content based on resolved configuration.
@@ -7,7 +7,7 @@ package rules
 
 import (
   "fmt"
-  
+
   "github.com/cdobbyn/editorlint/pkg/config"
 )
 

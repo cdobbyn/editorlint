@@ -2,7 +2,7 @@ package rules
 
 import (
   "testing"
-  
+
   "github.com/cdobbyn/editorlint/pkg/config"
 )
 

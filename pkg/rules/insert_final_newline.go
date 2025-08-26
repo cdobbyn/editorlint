@@ -3,7 +3,7 @@ package rules
 
 import (
   "fmt"
-  
+
   "github.com/cdobbyn/editorlint/pkg/config"
 )
 
@@ -13,7 +13,7 @@ func ValidateInsertFinalNewline(filePath string, content []byte, cfg *config.Res
   if cfg.InsertFinalNewline == nil || !*cfg.InsertFinalNewline {
     return nil
   }
-  
+
   if len(content) == 0 {
     // Empty files should end with a newline if insert_final_newline is true
     return &ValidationError{
@@ -22,11 +22,11 @@ func ValidateInsertFinalNewline(filePath string, content []byte, cfg *config.Res
       Message:  "empty file should end with a newline",
     }
   }
-  
+
   // Determine what the file actually ends with
   lastChar := content[len(content)-1]
   var actualEnding string
-  
+
   if len(content) >= 2 && content[len(content)-2] == '\r' && lastChar == '\n' {
     actualEnding = "crlf"
   } else if lastChar == '\r' {
@@ -41,13 +41,13 @@ func ValidateInsertFinalNewline(filePath string, content []byte, cfg *config.Res
       Message:  fmt.Sprintf("file should end with %s, but ends with character '%c' (0x%02x)", getEndOfLineDescription(cfg.EndOfLine), lastChar, lastChar),
     }
   }
-  
+
   // Determine expected line ending
   expectedEnding := cfg.EndOfLine
   if expectedEnding == "" {
     expectedEnding = "lf" // Default to LF
   }
-  
+
   // Check if actual matches expected
   if actualEnding != expectedEnding {
     return &ValidationError{
@@ -56,7 +56,7 @@ func ValidateInsertFinalNewline(filePath string, content []byte, cfg *config.Res
       Message:  fmt.Sprintf("file should end with %s, but ends with %s", getEndOfLineDescription(expectedEnding), getEndOfLineDescription(actualEnding)),
     }
   }
-  
+
   return nil
 }
 
@@ -66,13 +66,13 @@ func FixInsertFinalNewline(filePath string, content []byte, cfg *config.Resolved
   if cfg.InsertFinalNewline == nil || !*cfg.InsertFinalNewline {
     return content, false, nil
   }
-  
+
   // Determine expected line ending
   expectedEnding := cfg.EndOfLine
   if expectedEnding == "" {
     expectedEnding = "lf" // Default to LF
   }
-  
+
   var expectedBytes []byte
   switch expectedEnding {
   case "crlf":
@@ -82,17 +82,17 @@ func FixInsertFinalNewline(filePath string, content []byte, cfg *config.Resolved
   default: // "lf"
     expectedBytes = []byte("\n")
   }
-  
+
   // Handle empty files
   if len(content) == 0 {
     return expectedBytes, true, nil
   }
-  
+
   // Check what the file currently ends with
   lastChar := content[len(content)-1]
   var needsFix bool
   var newContent []byte
-  
+
   if len(content) >= 2 && content[len(content)-2] == '\r' && lastChar == '\n' {
     // File ends with CRLF
     if expectedEnding != "crlf" {
@@ -119,11 +119,11 @@ func FixInsertFinalNewline(filePath string, content []byte, cfg *config.Resolved
     newContent = append(content, expectedBytes...)
     needsFix = true
   }
-  
+
   if needsFix {
     return newContent, true, nil
   }
-  
+
   return content, false, nil
 }
 

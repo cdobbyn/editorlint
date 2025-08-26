@@ -9,27 +9,27 @@ inputs:
     description: 'Path to file or directory to validate'
     required: false
     default: '.'
-  
+
   config-file:
     description: 'Path to custom .editorconfig file (optional)'
     required: false
     default: ''
-  
+
   recurse:
     description: 'Process files recursively in directories'
     required: false
     default: 'true'
-  
+
   fix:
     description: 'Automatically fix violations instead of just reporting them'
     required: false
     default: 'false'
-  
+
   output-format:
     description: 'Output format: default, tabular, json, quiet'
     required: false
     default: 'default'
-  
+
   fail-on-violations:
     description: 'Fail the action if violations are found'
     required: false
@@ -39,17 +39,17 @@ inputs:
     description: 'Automatically commit fixes when fix=true'
     required: false
     default: 'false'
-  
+
   commit-message:
     description: 'Commit message for auto-committed fixes'
     required: false
     default: 'fix: auto-fix editorconfig violations'
-  
+
   git-user-name:
     description: 'Git user name for auto-commits'
     required: false
     default: 'github-actions[bot]'
-  
+
   git-user-email:
     description: 'Git user email for auto-commits'
     required: false
@@ -58,10 +58,10 @@ inputs:
 outputs:
   violations-found:
     description: 'Whether any violations were found (true/false)'
-  
+
   files-processed:
     description: 'Number of files processed'
-  
+
   files-fixed:
     description: 'Number of files fixed (when fix=true)'
 
@@ -72,96 +72,96 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.21'
-    
+
     - name: Build editorlint
       shell: bash
       run: |
         cd ${{ github.action_path }}
         go build -o editorlint cmd/editorlint/main.go
-    
+
     - name: Run editorlint
       id: lint
       shell: bash
       run: |
         cd ${{ github.workspace }}
-        
+
         # Build command arguments
         ARGS=()
         ARGS+=("${{ inputs.path }}")
-        
+
         if [ "${{ inputs.config-file }}" != "" ]; then
           ARGS+=("--config" "${{ inputs.config-file }}")
         fi
-        
+
         if [ "${{ inputs.recurse }}" = "true" ]; then
           ARGS+=("--recurse")
         fi
-        
+
         if [ "${{ inputs.fix }}" = "true" ]; then
           ARGS+=("--fix")
         fi
-        
+
         if [ "${{ inputs.output-format }}" != "default" ]; then
           ARGS+=("--output" "${{ inputs.output-format }}")
         fi
-        
+
         # Run editorlint and capture output
         set +e  # Don't exit on non-zero return code
         OUTPUT=$(${{ github.action_path }}/editorlint "${ARGS[@]}" 2>&1)
         EXIT_CODE=$?
         set -e
-        
+
         echo "$OUTPUT"
-        
+
         # Parse output for violations and files processed
         VIOLATIONS_FOUND="false"
-        FILES_PROCESSED="0" 
+        FILES_PROCESSED="0"
         FILES_FIXED="0"
-        
+
         if [ $EXIT_CODE -ne 0 ] && [ "${{ inputs.fix }}" = "false" ]; then
           VIOLATIONS_FOUND="true"
         fi
-        
+
         # Extract metrics from output (basic parsing)
         if echo "$OUTPUT" | grep -q "files processed"; then
           FILES_PROCESSED=$(echo "$OUTPUT" | grep "files processed" | sed -n 's/.*\([0-9]\+\) files processed.*/\1/p' || echo "0")
         fi
-        
+
         if echo "$OUTPUT" | grep -q "files fixed"; then
           FILES_FIXED=$(echo "$OUTPUT" | grep "files fixed" | sed -n 's/.*\([0-9]\+\) files fixed.*/\1/p' || echo "0")
           if [ "$FILES_FIXED" != "0" ]; then
             VIOLATIONS_FOUND="true"
           fi
         fi
-        
+
         # Set outputs
         echo "violations-found=$VIOLATIONS_FOUND" >> $GITHUB_OUTPUT
-        echo "files-processed=$FILES_PROCESSED" >> $GITHUB_OUTPUT  
+        echo "files-processed=$FILES_PROCESSED" >> $GITHUB_OUTPUT
         echo "files-fixed=$FILES_FIXED" >> $GITHUB_OUTPUT
-        
+
         # Handle auto-commit
         if [ "${{ inputs.auto-commit }}" = "true" ] && [ "${{ inputs.fix }}" = "true" ] && [ "$FILES_FIXED" != "0" ]; then
           echo "Auto-committing fixes..."
-          
+
           # Configure git
           git config --local user.name "${{ inputs.git-user-name }}"
           git config --local user.email "${{ inputs.git-user-email }}"
-          
+
           # Check if there are changes to commit
           if git diff --exit-code > /dev/null 2>&1; then
             echo "No changes to commit after fixes"
           else
             # Add files and attempt commit with conflict resolution
             git add .
-            
+
             # Try to commit, with retry logic for conflicts
             MAX_RETRIES=3
             RETRY_COUNT=0
-            
+
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               if git commit -m "${{ inputs.commit-message }}"; then
                 echo "Successfully committed fixes"
-                
+
                 # Try to push, with rebase if needed
                 if git push; then
                   echo "Successfully pushed fixes"
@@ -181,24 +181,25 @@ runs:
                 echo "Commit failed, retrying..."
                 RETRY_COUNT=$((RETRY_COUNT + 1))
               fi
-              
+
               if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
                 echo "Waiting before retry $((RETRY_COUNT + 1))/$MAX_RETRIES..."
                 sleep $((RETRY_COUNT * 2))
               fi
             done
-            
+
             if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
               echo "Failed to commit/push after $MAX_RETRIES attempts"
               exit 1
             fi
           fi
         fi
-        
+
         # Fail if violations found and fail-on-violations is true
         if [ "${{ inputs.fail-on-violations }}" = "true" ] && [ "$VIOLATIONS_FOUND" = "true" ] && [ "${{ inputs.fix }}" = "false" ]; then
           echo "Violations found and fail-on-violations is enabled"
           exit 1
         fi
-        
-        exit $EXIT_CODE
+
+        # Exit successfully if fail-on-violations is false or if we're in fix mode
+        exit 0

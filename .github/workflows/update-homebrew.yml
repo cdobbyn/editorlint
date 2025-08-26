@@ -21,7 +21,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          
+
           # Download the source tarball to calculate SHA256
           curl -L -o source.tar.gz "https://github.com/cdobbyn/editorlint/archive/refs/tags/${VERSION}.tar.gz"
           SHA256=$(sha256sum source.tar.gz | cut -d' ' -f1)

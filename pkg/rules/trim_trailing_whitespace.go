@@ -3,7 +3,7 @@ package rules
 import (
   "bytes"
   "fmt"
-  
+
   "github.com/cdobbyn/editorlint/pkg/config"
 )
 
@@ -13,20 +13,20 @@ func ValidateTrimTrailingWhitespace(filePath string, content []byte, cfg *config
   if cfg.TrimTrailingWhitespace == nil || !*cfg.TrimTrailingWhitespace {
     return nil
   }
-  
+
   if len(content) == 0 {
     return nil // Empty files are fine
   }
-  
+
   lines := bytes.Split(content, []byte("\n"))
-  
+
   // Check each line for trailing whitespace
   for i, line := range lines {
     // Skip the last line if it's empty (this would be after the final newline)
     if i == len(lines)-1 && len(line) == 0 {
       continue
     }
-    
+
     // Check if line has trailing whitespace
     if len(line) > 0 && isWhitespace(line[len(line)-1]) {
       lineNum := i + 1
@@ -37,7 +37,7 @@ func ValidateTrimTrailingWhitespace(filePath string, content []byte, cfg *config
       }
     }
   }
-  
+
   return nil
 }
 
@@ -47,11 +47,11 @@ func FixTrimTrailingWhitespace(filePath string, content []byte, cfg *config.Reso
   if cfg.TrimTrailingWhitespace == nil || !*cfg.TrimTrailingWhitespace {
     return content, false, nil
   }
-  
+
   if len(content) == 0 {
     return content, false, nil // Empty files are fine
   }
-  
+
   // Determine line ending to preserve
   var lineEnding []byte
   if bytes.Contains(content, []byte("\r\n")) {
@@ -61,31 +61,31 @@ func FixTrimTrailingWhitespace(filePath string, content []byte, cfg *config.Reso
   } else {
     lineEnding = []byte("\n")
   }
-  
+
   lines := bytes.Split(content, []byte("\n"))
   hasChanges := false
-  
+
   for i, line := range lines {
     // Skip the last line if it's empty (this would be after the final newline)
     if i == len(lines)-1 && len(line) == 0 {
       continue
     }
-    
+
     // Remove trailing whitespace
     trimmed := bytes.TrimRightFunc(line, func(r rune) bool {
       return r == ' ' || r == '\t'
     })
-    
+
     if !bytes.Equal(line, trimmed) {
       lines[i] = trimmed
       hasChanges = true
     }
   }
-  
+
   if !hasChanges {
     return content, false, nil
   }
-  
+
   // Rejoin lines with original line ending
   var result bytes.Buffer
   for i, line := range lines {
@@ -102,7 +102,7 @@ func FixTrimTrailingWhitespace(filePath string, content []byte, cfg *config.Reso
       }
     }
   }
-  
+
   return result.Bytes(), true, nil
 }
 

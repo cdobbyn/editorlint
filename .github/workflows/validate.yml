@@ -23,7 +23,7 @@ jobs:
               extends: ['@commitlint/config-conventional'],
               rules: {
                 'type-enum': [2, 'always', [
-                  'feat', 'fix', 'docs', 'style', 'refactor', 
+                  'feat', 'fix', 'docs', 'style', 'refactor',
                   'perf', 'test', 'chore', 'ci', 'build', 'revert'
                 ]],
                 'subject-case': [2, 'never', ['pascal-case', 'upper-case']],
@@ -58,7 +58,7 @@ jobs:
         run: |
           echo "test line with trailing spaces   " > test.txt
           ./editorlint test.txt && echo "Test failed: should have found violations" && exit 1 || echo "Test passed: found violations as expected"
-          
+
           ./editorlint --fix test.txt
           ./editorlint test.txt && echo "Test passed: no violations after fix" || (echo "Test failed: should have no violations after fix" && exit 1)
 
@@ -67,10 +67,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Test action - validate mode
         uses: ./
         with:
@@ -79,7 +79,7 @@ jobs:
           output-format: 'tabular'
           fail-on-violations: false
         id: validate
-      
+
       - name: Check outputs
         shell: bash
         run: |

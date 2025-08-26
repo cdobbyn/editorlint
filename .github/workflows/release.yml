@@ -93,18 +93,13 @@ jobs:
               fi
               echo "::endgroup::"
               
-              # Validate uplift configuration
-              echo "::group::Validating uplift configuration"
-              if uplift config check 2>&1; then
-                echo "Uplift configuration is valid"
-              else
-                echo "::warning::Uplift configuration validation failed"
-              fi
-              echo "::endgroup::"
-              
-              # Get next semantic version using uplift
-              echo "::group::Running uplift"
-              output=$(uplift tag --dry-run --next 2>&1) || {
+              # Get next semantic version using uplift with CLI arguments
+              echo "::group::Running uplift with CLI arguments"
+              output=$(uplift tag --dry-run --next \
+                --commit-major-prefixes="BREAKING CHANGE,!:" \
+                --commit-minor-prefixes="feat,feature" \
+                --commit-patch-prefixes="fix,chore,docs,style,refactor,perf,test,ci,build" \
+                2>&1) || {
                 exit_code=$?
                 echo "::error::Uplift failed with exit code $exit_code"
                 echo "Full output: $output"

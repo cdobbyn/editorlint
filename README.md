@@ -155,17 +155,119 @@ end_of_line = crlf
 
 ## Installation
 
+### GitHub Action
+
+Use editorlint in your GitHub workflows to automatically validate and fix EditorConfig violations:
+
+```yaml
+name: EditorConfig Check
+
+on: [push, pull_request]
+
+jobs:
+  editorconfig:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dobbo-ca/editorlint@v1
+        with:
+          path: '.'
+          fix: false
+          fail-on-violations: true
+```
+
+**Auto-fix with commits:**
+
+```yaml
+name: Auto-fix EditorConfig
+
+on: [push]
+
+jobs:
+  editorconfig-fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dobbo-ca/editorlint@v1
+        with:
+          fix: true
+          auto-commit: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**Action Inputs:**
+
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `path` | Path to file or directory to validate | No | `.` |
+| `config-file` | Path to custom .editorconfig file | No | `` |
+| `recurse` | Process files recursively in directories | No | `true` |
+| `fix` | Automatically fix violations instead of just reporting | No | `false` |
+| `output-format` | Output format: default, tabular, json, quiet | No | `default` |
+| `fail-on-violations` | Fail the action if violations are found | No | `true` |
+| `auto-commit` | Automatically commit fixes when fix=true | No | `false` |
+| `commit-message` | Commit message for auto-committed fixes | No | `fix: auto-fix editorconfig violations` |
+| `git-user-name` | Git user name for auto-commits | No | `github-actions[bot]` |
+| `git-user-email` | Git user email for auto-commits | No | `github-actions[bot]@users.noreply.github.com` |
+| `token` | GitHub token for auto-commits (defaults to github.token) | No | `` |
+| `ignore-patterns` | Comma-separated list of glob patterns to ignore | No | `` |
+
+**Action Outputs:**
+
+| Output | Description |
+|--------|-------------|
+| `violations-found` | Whether any violations were found (true/false) |
+| `files-processed` | Number of files processed |
+| `files-fixed` | Number of files fixed (when fix=true) |
+
+**Example Workflows:**
+
+```yaml
+# Basic validation - fail on violations
+- uses: dobbo-ca/editorlint@v1
+
+# Auto-fix violations and commit changes
+- uses: dobbo-ca/editorlint@v1
+  with:
+    fix: true
+    auto-commit: true
+    commit-message: 'style: fix editorconfig violations'
+    token: ${{ secrets.GITHUB_TOKEN }}
+
+# Validate specific directory with custom config
+- uses: dobbo-ca/editorlint@v1
+  with:
+    path: 'src/'
+    config-file: '.editorconfig.strict'
+    ignore-patterns: '*.tmp,node_modules/**'
+
+# Use outputs in subsequent steps
+- uses: dobbo-ca/editorlint@v1
+  id: lint
+- run: echo "Fixed ${{ steps.lint.outputs.files-fixed }} files"
+```
+
 ### Homebrew (macOS and Linux)
 
 ```bash
-brew tap cdobbyn/taps
+brew tap dobbo-ca/taps
 brew install editorlint
 ```
 
 Or install directly:
 
 ```bash
-brew install cdobbyn/taps/editorlint
+brew install dobbo-ca/taps/editorlint
+```
+
+### Chocolatey (Windows)
+
+```powershell
+choco install editorlint -s https://github.com/dobbo-ca/chocolatey-packages
 ```
 
 ### Go Install
@@ -190,6 +292,48 @@ editorlint is built with a modular architecture where each EditorConfig rule is 
 - `end_of_line.go` - Line ending validation and conversion
 
 This makes it easy to add new validation rules or modify existing ones.
+
+## GitHub Actions Marketplace
+
+### Publishing to Marketplace
+
+To publish this action to the GitHub Actions Marketplace:
+
+1. **Create a Release**: The action must be tagged with a semantic version
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **Use Major Version Tags**: Create and maintain major version tags for easier consumption
+   ```bash
+   git tag v1
+   git push origin v1
+   ```
+
+3. **Marketplace Requirements Met**:
+   - ✅ `action.yml` with proper metadata and branding
+   - ✅ Comprehensive README with usage examples
+   - ✅ MIT License
+   - ✅ Semantic versioning
+   - ✅ Proper input/output documentation
+
+### Version Tags
+
+For marketplace compatibility, this action follows semantic versioning:
+
+- **v1.x.x**: Latest stable version with major version tag `v1`
+- **v1.0.0+**: Initial marketplace releases
+- Users can reference `@v1` for automatic minor/patch updates
+- Users can reference `@v1.0.0` for exact version pinning
+
+### Marketplace Benefits
+
+Publishing to the marketplace provides:
+- **Discoverability**: Users can find the action in GitHub's marketplace
+- **Trust**: Verified actions with clear documentation
+- **Version Management**: Automatic handling of major version aliases
+- **Usage Analytics**: Insights into action adoption
 
 ## Examples
 

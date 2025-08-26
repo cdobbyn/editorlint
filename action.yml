@@ -55,6 +55,11 @@ inputs:
     required: false
     default: 'github-actions[bot]@users.noreply.github.com'
 
+  token:
+    description: 'GitHub token for auto-commits (when auto-commit=true)'
+    required: false
+    default: ''
+
   ignore-patterns:
     description: 'Comma-separated list of glob patterns to ignore (e.g. "*.tmp,node_modules/**")'
     required: false
@@ -173,9 +178,19 @@ runs:
         if [ "${{ inputs.auto-commit }}" = "true" ] && [ "${{ inputs.fix }}" = "true" ] && [ "$FILES_FIXED" != "0" ]; then
           echo "Auto-committing fixes..."
 
-          # Configure git
+          # Determine which token to use
+          if [ "${{ inputs.token }}" != "" ]; then
+            GITHUB_TOKEN="${{ inputs.token }}"
+          else
+            GITHUB_TOKEN="${{ github.token }}"
+          fi
+          
+          # Configure git with token authentication
           git config --local user.name "${{ inputs.git-user-name }}"
           git config --local user.email "${{ inputs.git-user-email }}"
+          
+          # Set up authentication for HTTPS push
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
 
           # Check if there are changes to commit
           if git diff --exit-code > /dev/null 2>&1; then

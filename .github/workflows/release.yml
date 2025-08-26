@@ -189,8 +189,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          git tag -a "${{ steps.version.outputs.version }}" -m "${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
 
       - name: Generate changelog
         id: changelog
@@ -198,7 +198,7 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --verbose --tag v${{ steps.version.outputs.version }}
+          args: --verbose --tag ${{ steps.version.outputs.version }}
 
   build:
     needs: version
@@ -283,8 +283,8 @@ jobs:
         if: github.event.inputs.dry_run != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.version.outputs.version }}
-          name: Release v${{ needs.version.outputs.version }}
+          tag_name: ${{ needs.version.outputs.version }}
+          name: ${{ needs.version.outputs.version }}
           body: ${{ needs.version.outputs.changelog }}
           draft: false
           prerelease: false
@@ -299,6 +299,6 @@ jobs:
         if: github.event.inputs.dry_run == 'true'
         run: |
           echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Release Notes:**" >> $GITHUB_STEP_SUMMARY
           echo "${{ needs.version.outputs.changelog }}" >> $GITHUB_STEP_SUMMARY

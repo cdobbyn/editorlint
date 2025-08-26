@@ -1,0 +1,176 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+    tags-ignore:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      force_version:
+        description: 'Force specific version (e.g. 1.2.3)'
+        type: string
+      dry_run:
+        description: 'Dry run (no actual release)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.content }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.force_version }}" ]; then
+            version="${{ github.event.inputs.force_version }}"
+            echo "Using forced version: $version"
+          else
+            # Install uplift
+            curl -L https://github.com/gembaadvantage/uplift/releases/latest/download/uplift_linux_x86_64.tar.gz | tar xz
+            sudo mv uplift /usr/local/bin/
+            
+            # Get next semantic version
+            output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
+            version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
+            
+            if [ -z "$version" ]; then
+              echo "No version bump needed"
+              exit 0
+            fi
+            
+            echo "Next version determined: $version"
+          fi
+          
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.version.outputs.version != ''
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --verbose --tag v${{ steps.version.outputs.version }}
+
+      - name: Create git tag
+        if: steps.version.outputs.version != '' && github.event.inputs.dry_run != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
+  build:
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          if [ "$GOOS" = "windows" ]; then
+            BINARY_NAME="editorlint.exe"
+          else
+            BINARY_NAME="editorlint"
+          fi
+          
+          go build -ldflags="-s -w" -o "dist/${BINARY_NAME}" cmd/editorlint/main.go
+          
+          # Create archive
+          ARCHIVE_NAME="editorlint_v${VERSION}_${GOOS}_${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then
+            cd dist && zip "../${ARCHIVE_NAME}.zip" "${BINARY_NAME}" && cd ..
+          else
+            tar -czf "${ARCHIVE_NAME}.tar.gz" -C dist "${BINARY_NAME}"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: editorlint-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            *.tar.gz
+            *.zip
+
+  create-release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    if: needs.version.outputs.version != ''
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Move artifacts to root
+        run: |
+          find artifacts -name "*.tar.gz" -o -name "*.zip" | xargs -I {} mv {} .
+
+      - name: Generate checksums
+        run: |
+          sha256sum *.tar.gz *.zip > checksums.txt
+
+      - name: Create GitHub release
+        if: github.event.inputs.dry_run != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: Release v${{ needs.version.outputs.version }}
+          body: ${{ needs.version.outputs.changelog }}
+          draft: false
+          prerelease: false
+          files: |
+            *.tar.gz
+            *.zip
+            checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dry run summary
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Notes:**" >> $GITHUB_STEP_SUMMARY
+          echo "${{ needs.version.outputs.changelog }}" >> $GITHUB_STEP_SUMMARY

@@ -1,3 +1,0 @@
-Very long path file with trailing spaces   
-And trailing tabs		
-No final newline here

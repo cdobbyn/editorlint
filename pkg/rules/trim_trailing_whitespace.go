@@ -4,7 +4,7 @@ import (
   "bytes"
   "fmt"
 
-  "github.com/cdobbyn/editorlint/pkg/config"
+  "github.com/dobbo-ca/editorlint/pkg/config"
 )
 
 // ValidateTrimTrailingWhitespace checks if the file has trailing whitespace when it shouldn't

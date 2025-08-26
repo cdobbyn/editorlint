@@ -8,7 +8,7 @@ package rules
 import (
   "fmt"
 
-  "github.com/cdobbyn/editorlint/pkg/config"
+  "github.com/dobbo-ca/editorlint/pkg/config"
 )
 
 // ValidationError represents a validation failure

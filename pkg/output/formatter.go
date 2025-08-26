@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/cdobbyn/editorlint/pkg/rules"
+	"github.com/dobbo-ca/editorlint/pkg/rules"
 )
 
 // OutputFormat represents different output formatting options

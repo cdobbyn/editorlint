@@ -19,9 +19,9 @@ import (
   "strings"
   "sync"
 
-  "github.com/cdobbyn/editorlint/pkg/config"
-  "github.com/cdobbyn/editorlint/pkg/output"
-  "github.com/cdobbyn/editorlint/pkg/rules"
+  "github.com/dobbo-ca/editorlint/pkg/config"
+  "github.com/dobbo-ca/editorlint/pkg/output"
+  "github.com/dobbo-ca/editorlint/pkg/rules"
 )
 
 // Config holds configuration options for the validator.

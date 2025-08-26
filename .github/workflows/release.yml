@@ -234,7 +234,7 @@ jobs:
 
       - name: Trigger Homebrew tap update
         run: |
-          gh api repos/cdobbyn/homebrew-taps/dispatches \
+          gh api repos/dobbo-ca/homebrew-taps/dispatches \
             --method POST \
             --field event_type="update_editorlint" \
             --field client_payload[version]="${{ needs.semantic-release.outputs.new-release-version }}" \

@@ -4,7 +4,7 @@ import (
   "bytes"
   "fmt"
 
-  "github.com/cdobbyn/editorlint/pkg/config"
+  "github.com/dobbo-ca/editorlint/pkg/config"
 )
 
 // ValidateEndOfLine checks if all line endings in the file match the configured style

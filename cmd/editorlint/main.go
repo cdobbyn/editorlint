@@ -4,7 +4,7 @@ import (
   "fmt"
   "os"
 
-  "github.com/cdobbyn/editorlint/pkg/validator"
+  "github.com/dobbo-ca/editorlint/pkg/validator"
   "github.com/spf13/cobra"
 )
 

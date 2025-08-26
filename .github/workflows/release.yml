@@ -44,16 +44,29 @@ jobs:
             curl -L https://github.com/gembaadvantage/uplift/releases/latest/download/uplift_linux_x86_64.tar.gz | tar xz
             sudo mv uplift /usr/local/bin/
             
-            # Get next semantic version
-            output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
-            version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
-            
-            if [ -z "$version" ]; then
-              echo "No version bump needed"
-              exit 0
+            # Check if any tags exist
+            if ! git tag -l | grep -q .; then
+              echo "No existing tags found, this is the first release"
+              # For first release, determine version from commit messages
+              if git log --oneline --grep="feat" | head -1 | grep -q .; then
+                version="1.0.0"
+                echo "First release with features, using version: $version"
+              else
+                version="0.1.0"
+                echo "First release without features, using version: $version"
+              fi
+            else
+              # Get next semantic version using uplift
+              output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
+              version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
+              
+              if [ -z "$version" ]; then
+                echo "No version bump needed based on commits"
+                exit 0
+              fi
+              
+              echo "Next version determined: $version"
             fi
-            
-            echo "Next version determined: $version"
           fi
           
           echo "version=$version" >> $GITHUB_OUTPUT

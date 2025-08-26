@@ -1,0 +1,175 @@
+name: 'EditorConfig Lint (Windows)'
+description: 'Windows-specific implementation for EditorConfig Lint'
+
+inputs:
+  version:
+    description: 'Version of editorlint to use'
+    required: false
+    default: 'latest'
+  path:
+    description: 'Path to file or directory to validate'
+    required: false
+    default: '.'
+  config-file:
+    description: 'Path to custom .editorconfig file (optional)'
+    required: false
+    default: ''
+  recurse:
+    description: 'Process files recursively in directories'
+    required: false
+    default: 'true'
+  fix:
+    description: 'Automatically fix violations instead of just reporting them'
+    required: false
+    default: 'false'
+  output-format:
+    description: 'Output format: default, tabular, json, quiet'
+    required: false
+    default: 'default'
+  fail-on-violations:
+    description: 'Fail the action if violations are found'
+    required: false
+    default: 'true'
+  auto-commit:
+    description: 'Automatically commit fixes when fix=true'
+    required: false
+    default: 'false'
+  commit-message:
+    description: 'Commit message for auto-committed fixes'
+    required: false
+    default: 'fix: auto-fix editorconfig violations'
+  git-user-name:
+    description: 'Git user name for auto-commits'
+    required: false
+    default: 'github-actions[bot]'
+  git-user-email:
+    description: 'Git user email for auto-commits'
+    required: false
+    default: 'github-actions[bot]@users.noreply.github.com'
+  ignore-patterns:
+    description: 'Comma-separated list of glob patterns to ignore'
+    required: false
+    default: ''
+
+outputs:
+  violations-found:
+    description: 'Whether any violations were found (true/false)'
+  files-processed:
+    description: 'Number of files processed'
+  files-fixed:
+    description: 'Number of files fixed (when fix=true)'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download editorlint binary
+      shell: pwsh
+      run: |
+        $GOARCH = if ($env:RUNNER_ARCH -eq "X64") { "amd64" } elseif ($env:RUNNER_ARCH -eq "ARM64") { "arm64" } else { throw "Unsupported architecture: $env:RUNNER_ARCH" }
+        
+        if ("${{ inputs.version }}" -eq "latest") {
+          Write-Host "Fetching latest release version..."
+          $response = Invoke-RestMethod -Uri "https://api.github.com/repos/editorlint/editorlint/releases/latest"
+          $VERSION = $response.tag_name
+          if (-not $VERSION) { throw "Failed to fetch latest version" }
+          Write-Host "Latest version: $VERSION"
+        } else {
+          $VERSION = "${{ inputs.version }}"
+          Write-Host "Using specified version: $VERSION"
+        }
+        
+        $BINARY_NAME = "editorlint.exe"
+        $ARCHIVE_NAME = "editorlint_v${VERSION}_windows_${GOARCH}.zip"
+        $DOWNLOAD_URL = "https://github.com/editorlint/editorlint/releases/download/${VERSION}/${ARCHIVE_NAME}"
+        
+        Write-Host "Downloading $ARCHIVE_NAME..."
+        Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $ARCHIVE_NAME
+        Expand-Archive -Path $ARCHIVE_NAME -DestinationPath "${{ github.action_path }}" -Force
+        Write-Host "Successfully downloaded and extracted $BINARY_NAME"
+
+    - name: Run editorlint
+      id: lint
+      shell: pwsh
+      run: |
+        Set-Location "${{ github.workspace }}"
+        
+        $ARGS = @("${{ inputs.path }}")
+        
+        if ("${{ inputs.config-file }}" -ne "") {
+          $ARGS += @("--config", "${{ inputs.config-file }}")
+        }
+        
+        if ("${{ inputs.recurse }}" -eq "true") {
+          $ARGS += "--recurse"
+        }
+        
+        if ("${{ inputs.fix }}" -eq "true") {
+          $ARGS += "--fix"
+        }
+        
+        if ("${{ inputs.output-format }}" -ne "default") {
+          $ARGS += @("--output", "${{ inputs.output-format }}")
+        }
+        
+        if ("${{ inputs.ignore-patterns }}" -ne "") {
+          $patterns = "${{ inputs.ignore-patterns }}".Split(',')
+          foreach ($pattern in $patterns) {
+            $trimmed = $pattern.Trim()
+            $ARGS += @("--ignore", $trimmed)
+          }
+        }
+        
+        $BINARY_PATH = Join-Path "${{ github.action_path }}" "editorlint.exe"
+        
+        try {
+          $OUTPUT = & $BINARY_PATH @ARGS 2>&1
+          $EXIT_CODE = $LASTEXITCODE
+        } catch {
+          $OUTPUT = $_.Exception.Message
+          $EXIT_CODE = 1
+        }
+        
+        Write-Host $OUTPUT
+        
+        $VIOLATIONS_FOUND = "false"
+        $FILES_PROCESSED = "0"
+        $FILES_FIXED = "0"
+        
+        if ($EXIT_CODE -ne 0 -and "${{ inputs.fix }}" -eq "false") {
+          $VIOLATIONS_FOUND = "true"
+        }
+        
+        if ($OUTPUT -match "(\d+) files processed") {
+          $FILES_PROCESSED = $matches[1]
+        }
+        
+        if ($OUTPUT -match "(\d+) files fixed") {
+          $FILES_FIXED = $matches[1]
+          if ([int]$FILES_FIXED -gt 0) {
+            $VIOLATIONS_FOUND = "true"
+          }
+        }
+        
+        "violations-found=$VIOLATIONS_FOUND" >> $env:GITHUB_OUTPUT
+        "files-processed=$FILES_PROCESSED" >> $env:GITHUB_OUTPUT
+        "files-fixed=$FILES_FIXED" >> $env:GITHUB_OUTPUT
+        
+        # Handle auto-commit (simplified for PowerShell)
+        if ("${{ inputs.auto-commit }}" -eq "true" -and "${{ inputs.fix }}" -eq "true" -and [int]$FILES_FIXED -gt 0) {
+          Write-Host "Auto-committing fixes..."
+          git config --local user.name "${{ inputs.git-user-name }}"
+          git config --local user.email "${{ inputs.git-user-email }}"
+          
+          if (git diff --exit-code) {
+            Write-Host "No changes to commit after fixes"
+          } else {
+            git add .
+            git commit -m "${{ inputs.commit-message }}"
+            git push
+          }
+        }
+        
+        if ("${{ inputs.fail-on-violations }}" -eq "true" -and $VIOLATIONS_FOUND -eq "true" -and "${{ inputs.fix }}" -eq "false") {
+          Write-Host "Violations found and fail-on-violations is enabled"
+          exit 1
+        }

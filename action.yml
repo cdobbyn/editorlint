@@ -81,7 +81,10 @@ runs:
     - name: Build editorlint
       shell: bash
       run: |
-        cd ${{ github.action_path }}
+        # Convert Windows path to Unix-style for bash compatibility
+        ACTION_PATH="${{ github.action_path }}"
+        ACTION_PATH=$(echo "$ACTION_PATH" | sed 's|\\|/|g')
+        cd "$ACTION_PATH"
         go build -o editorlint cmd/editorlint/main.go
 
     - name: Run editorlint
@@ -121,7 +124,10 @@ runs:
 
         # Run editorlint and capture output
         set +e  # Don't exit on non-zero return code
-        OUTPUT=$(${{ github.action_path }}/editorlint "${ARGS[@]}" 2>&1)
+        # Convert Windows path to Unix-style for bash compatibility
+        ACTION_PATH="${{ github.action_path }}"
+        ACTION_PATH=$(echo "$ACTION_PATH" | sed 's|\\|/|g')
+        OUTPUT=$("$ACTION_PATH/editorlint" "${ARGS[@]}" 2>&1)
         EXIT_CODE=$?
         set -e
 

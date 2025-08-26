@@ -1,34 +1,30 @@
 # Uplift configuration for semantic versioning
-# Documentation: https://uplift.run/
+# Documentation: https://upliftci.dev/
 
-# Semantic versioning bumps based on commit types
+# File-based version bumping
 bumps:
-  - regex:
-      - "BREAKING CHANGE"
-      - "!:"
-    type: "major"
-  
-  - regex:
-      - "^feat"
-      - "^feature"
-    type: "minor"
+  - file: go.mod
+    regex: ^module
     
-  - regex:
-      - "^fix"
-      - "^chore" 
-      - "^docs"
-      - "^style"
-      - "^refactor"
-      - "^perf"
-      - "^test"
-      - "^ci"
-      - "^build"
-    type: "patch"
-
-# Git configuration
+# Git configuration  
 git:
   ignoreDetached: false
 
-# Environment variables
-env:
-  GITHUB_TOKEN: true
+# Semantic versioning based on commit messages
+commits:
+  major:
+    - "BREAKING CHANGE"
+    - "!:"
+  minor:
+    - "feat"
+    - "feature"
+  patch:
+    - "fix" 
+    - "chore"
+    - "docs"
+    - "style"
+    - "refactor"
+    - "perf"
+    - "test"
+    - "ci"
+    - "build"

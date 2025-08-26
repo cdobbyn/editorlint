@@ -159,6 +159,8 @@ end_of_line = crlf
 
 Use editorlint in your GitHub workflows to automatically validate and fix EditorConfig violations:
 
+> **Note**: Replace `dobbo-ca` with the current organization name if this repository has been moved.
+
 ```yaml
 name: EditorConfig Check
 
@@ -279,6 +281,8 @@ go install github.com/dobbo-ca/editorlint@latest
 ### Pre-built Binaries
 
 Download pre-built binaries from the [releases page](https://github.com/dobbo-ca/editorlint/releases).
+
+> **Note**: If this repository has been moved to a different organization, replace `dobbo-ca` in the above commands with the current organization name.
 
 ## Architecture
 

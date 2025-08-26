@@ -216,11 +216,11 @@ jobs:
           VERSION=${{ needs.semantic-release.outputs.new-release-version }}
           
           # Download checksum files for each platform
-          curl -L -o darwin_arm64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_arm64.tar.gz.sha256"
-          curl -L -o darwin_amd64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_amd64.tar.gz.sha256"
-          curl -L -o linux_arm64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_linux_arm64.tar.gz.sha256"
-          curl -L -o linux_amd64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_linux_amd64.tar.gz.sha256"
-          curl -L -o windows_amd64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_windows_amd64.zip.sha256"
+          curl -L -o darwin_arm64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_arm64.tar.gz.sha256"
+          curl -L -o darwin_amd64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_amd64.tar.gz.sha256"
+          curl -L -o linux_arm64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_linux_arm64.tar.gz.sha256"
+          curl -L -o linux_amd64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_linux_amd64.tar.gz.sha256"
+          curl -L -o windows_amd64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_windows_amd64.zip.sha256"
           
           # Extract SHA256 values (first column)
           DARWIN_ARM64_SHA256=$(cut -d' ' -f1 darwin_arm64.sha256)
@@ -241,11 +241,11 @@ jobs:
         with:
           app-id: ${{ vars.AUTOMATIONS_APP_ID }}
           private-key: ${{ secrets.AUTOMATIONS_APP_PRIVATE_KEY }}
-          owner: dobbo-ca
+          owner: ${{ github.repository_owner }}
 
       - name: Trigger Homebrew tap update
         run: |
-          gh api repos/dobbo-ca/homebrew-taps/dispatches \
+          gh api repos/${{ github.repository_owner }}/homebrew-taps/dispatches \
             --method POST \
             --field event_type="update_editorlint" \
             --field client_payload[version]="${{ needs.semantic-release.outputs.new-release-version }}" \
@@ -258,7 +258,7 @@ jobs:
 
       - name: Trigger Chocolatey package update
         run: |
-          gh api repos/dobbo-ca/chocolatey-packages/dispatches \
+          gh api repos/${{ github.repository_owner }}/chocolatey-packages/dispatches \
             --method POST \
             --field event_type="update_editorlint" \
             --field client_payload[version]="${{ needs.semantic-release.outputs.new-release-version }}" \

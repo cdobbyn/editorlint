@@ -302,3 +302,49 @@ jobs:
           echo "**Version:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Release Notes:**" >> $GITHUB_STEP_SUMMARY
           echo "${{ needs.version.outputs.changelog }}" >> $GITHUB_STEP_SUMMARY
+
+  update-homebrew:
+    needs: [version, create-release]
+    runs-on: ubuntu-latest
+    if: needs.version.outputs.version != '' && github.event.inputs.dry_run != 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Get release info
+        id: release
+        run: |
+          VERSION=${{ needs.version.outputs.version }}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Download the source tarball to calculate SHA256
+          curl -L -o source.tar.gz "https://github.com/cdobbyn/editorlint/archive/refs/tags/${VERSION}.tar.gz"
+          SHA256=$(sha256sum source.tar.gz | cut -d' ' -f1)
+          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+
+      - name: Update Homebrew formula
+        run: |
+          # Check if Formula directory and file exist
+          if [ ! -f "Formula/editorlint.rb" ]; then
+            echo "Formula/editorlint.rb not found, skipping Homebrew update"
+            exit 0
+          fi
+          
+          sed -i "s|url \".*\"|url \"https://github.com/cdobbyn/editorlint/archive/refs/tags/${{ steps.release.outputs.VERSION }}.tar.gz\"|" Formula/editorlint.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${{ steps.release.outputs.SHA256 }}\"|" Formula/editorlint.rb
+          sed -i "s|version \".*\"|version \"${{ steps.release.outputs.VERSION }}\"|" Formula/editorlint.rb
+
+      - name: Commit updated formula
+        run: |
+          if git diff --quiet Formula/editorlint.rb; then
+            echo "No changes to formula file"
+            exit 0
+          fi
+          
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Formula/editorlint.rb
+          git commit -m "chore: update Homebrew formula to ${{ steps.release.outputs.VERSION }}"
+          git push

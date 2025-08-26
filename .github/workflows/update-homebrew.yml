@@ -1,8 +1,8 @@
-name: Update Homebrew Formula
+name: Homebrew
 
 on:
   release:
-    types: [published, released]
+    types: [published]
 
 permissions:
   contents: write

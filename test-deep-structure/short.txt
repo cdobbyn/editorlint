@@ -1,0 +1,2 @@
+Line with trailing spaces   
+No newline

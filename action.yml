@@ -98,7 +98,7 @@ runs:
   steps:
     - name: Run EditorConfig Lint (Windows)
       if: runner.os == 'Windows'
-      uses: ./action-windows.yml
+      uses: editorlint/editorlint/.github/actions/windows@main
       with:
         version: ${{ inputs.version }}
         path: ${{ inputs.path }}
@@ -115,7 +115,7 @@ runs:
 
     - name: Run EditorConfig Lint (Linux)
       if: runner.os == 'Linux'
-      uses: ./action-linux.yml
+      uses: editorlint/editorlint/.github/actions/linux@main
       with:
         version: ${{ inputs.version }}
         path: ${{ inputs.path }}
@@ -132,7 +132,7 @@ runs:
 
     - name: Run EditorConfig Lint (macOS)
       if: runner.os == 'macOS'
-      uses: ./action-macos.yml
+      uses: editorlint/editorlint/.github/actions/macos@main
       with:
         version: ${{ inputs.version }}
         path: ${{ inputs.path }}

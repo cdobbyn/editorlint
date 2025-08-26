@@ -3,10 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'README.md'
-      - 'docs/**'
-      - '.github/**'
+    paths:
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '*.go'
     tags-ignore:
       - 'v*.*.*'
   workflow_dispatch:
@@ -216,10 +218,10 @@ jobs:
           VERSION=${{ needs.semantic-release.outputs.new-release-version }}
           
           # Download checksum files for each platform
-          curl -L -o darwin_arm64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_arm64.tar.gz.sha256"
-          curl -L -o darwin_amd64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_amd64.tar.gz.sha256"
-          curl -L -o linux_arm64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_linux_arm64.tar.gz.sha256"
-          curl -L -o linux_amd64.sha256 "https://github.com/dobbo-ca/editorlint/releases/download/${VERSION}/editorlint_v${VERSION}_linux_amd64.tar.gz.sha256"
+          curl -L -o darwin_arm64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_arm64.tar.gz.sha256"
+          curl -L -o darwin_amd64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_darwin_amd64.tar.gz.sha256"
+          curl -L -o linux_arm64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_linux_arm64.tar.gz.sha256"
+          curl -L -o linux_amd64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_linux_amd64.tar.gz.sha256"
           
           # Extract SHA256 values (first column)
           DARWIN_ARM64_SHA256=$(cut -d' ' -f1 darwin_arm64.sha256)
@@ -238,11 +240,11 @@ jobs:
         with:
           app-id: ${{ vars.AUTOMATIONS_APP_ID }}
           private-key: ${{ secrets.AUTOMATIONS_APP_PRIVATE_KEY }}
-          owner: dobbo-ca
+          owner: ${{ github.repository_owner }}
 
       - name: Trigger Homebrew tap update
         run: |
-          gh api repos/dobbo-ca/homebrew-taps/dispatches \
+          gh api repos/${{ github.repository_owner }}/homebrew-taps/dispatches \
             --method POST \
             --field event_type="update_editorlint" \
             --field client_payload[version]="${{ needs.semantic-release.outputs.new-release-version }}" \
@@ -250,5 +252,41 @@ jobs:
             --field client_payload[darwin_amd64_sha256]="${{ steps.checksums.outputs.DARWIN_AMD64_SHA256 }}" \
             --field client_payload[linux_arm64_sha256]="${{ steps.checksums.outputs.LINUX_ARM64_SHA256 }}" \
             --field client_payload[linux_amd64_sha256]="${{ steps.checksums.outputs.LINUX_AMD64_SHA256 }}"
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+  update-chocolatey:
+    needs: [semantic-release, build]
+    runs-on: ubuntu-latest
+    if: needs.semantic-release.outputs.new-release-published == 'true'
+    steps:
+      - name: Get Windows AMD64 SHA256 from release assets
+        id: windows-checksum
+        run: |
+          VERSION=${{ needs.semantic-release.outputs.new-release-version }}
+          
+          # Download checksum file for Windows AMD64
+          curl -L -o windows_amd64.sha256 "https://github.com/${{ github.repository }}/releases/download/${VERSION}/editorlint_v${VERSION}_windows_amd64.zip.sha256"
+          
+          # Extract SHA256 value (first column)
+          WINDOWS_AMD64_SHA256=$(cut -d' ' -f1 windows_amd64.sha256)
+          
+          echo "WINDOWS_AMD64_SHA256=$WINDOWS_AMD64_SHA256" >> $GITHUB_OUTPUT
+
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.AUTOMATIONS_APP_ID }}
+          private-key: ${{ secrets.AUTOMATIONS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Trigger Chocolatey package update
+        run: |
+          gh api repos/${{ github.repository_owner }}/chocolatey-packages/dispatches \
+            --method POST \
+            --field event_type="update_editorlint" \
+            --field client_payload[version]="${{ needs.semantic-release.outputs.new-release-version }}" \
+            --field client_payload[windows_amd64_sha256]="${{ steps.windows-checksum.outputs.WINDOWS_AMD64_SHA256 }}"
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}

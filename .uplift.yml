@@ -1,37 +1,46 @@
+# Uplift configuration for semantic versioning
+# Documentation: https://uplift.run/
+
+# Files to update with version numbers
 bumps:
   - file: go.mod
-    regex: "^module github.com/cdobbyn/editorlint$"
-    replace: "module github.com/cdobbyn/editorlint"
+    search: "^module github.com/cdobbyn/editorlint$"
+    replaceWith: "module github.com/cdobbyn/editorlint"
 
   - file: action.yml  
-    regex: "name: 'EditorConfig Lint'"
-    replace: "name: 'EditorConfig Lint'"
+    search: "name: 'EditorConfig Lint'"
+    replaceWith: "name: 'EditorConfig Lint'"
 
+# Git configuration
 git:
+  # Ignore detached HEAD state (useful in CI)
   ignoreDetached: false
-  commitAuthor:
-    name: "github-actions[bot]"
-    email: "github-actions[bot]@users.noreply.github.com"
-  commitMessage: "chore: release v{{.Next}}"
+  # Disable GPG signing in CI
+  gpg: false
+  # Push changes back to the repository
+  push: false
 
+# Changelog generation
 changelog:
-  out: CHANGELOG.md
+  # Skip changelog generation (using git-cliff instead)
+  skip: true
 
+# Environment variables
 env:
   - name: GITHUB_TOKEN
-    required: true
+    required: false
 
-commits:
+# Commit type mapping for semantic versioning
+commitTypeMap:
   major:
     - "BREAKING CHANGE"
-    - "!:"
+    - "breaking"
   minor:
     - "feat"
     - "feature"
   patch:
     - "fix"
     - "bug"
-    - "patch"
     - "chore"
     - "docs"
     - "style"
@@ -40,3 +49,46 @@ commits:
     - "test"
     - "ci"
     - "build"
+
+# Conventional commits configuration
+conventionalCommits:
+  # Types that trigger version bumps
+  types:
+    feat:
+      bumps: minor
+      description: "A new feature"
+    fix:
+      bumps: patch
+      description: "A bug fix"
+    docs:
+      bumps: patch
+      description: "Documentation only changes"
+    style:
+      bumps: patch
+      description: "Changes that do not affect the meaning of the code"
+    refactor:
+      bumps: patch
+      description: "A code change that neither fixes a bug nor adds a feature"
+    perf:
+      bumps: patch
+      description: "A code change that improves performance"
+    test:
+      bumps: patch
+      description: "Adding missing tests or correcting existing tests"
+    build:
+      bumps: patch
+      description: "Changes that affect the build system or external dependencies"
+    ci:
+      bumps: patch
+      description: "Changes to our CI configuration files and scripts"
+    chore:
+      bumps: patch
+      description: "Other changes that don't modify src or test files"
+    revert:
+      bumps: patch
+      description: "Reverts a previous commit"
+
+# Tag configuration
+tag:
+  # Use semantic versioning format
+  format: "v{{.Version}}"

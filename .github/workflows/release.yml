@@ -36,47 +36,152 @@ jobs:
       - name: Determine next version
         id: version
         run: |
+          set -e  # Exit on error
+          
+          # Debug logging
+          echo "::group::Git Information"
+          echo "Current branch: $(git branch --show-current)"
+          echo "Latest commit: $(git log -1 --oneline)"
+          echo "All tags:"
+          git tag -l || echo "No tags found"
+          echo "::endgroup::"
+          
           if [ -n "${{ github.event.inputs.force_version }}" ]; then
             version="${{ github.event.inputs.force_version }}"
             echo "Using forced version: $version"
           else
             # Install uplift
+            echo "::group::Installing uplift"
             UPLIFT_VERSION=$(curl -s https://api.github.com/repos/gembaadvantage/uplift/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            echo "Installing uplift version: $UPLIFT_VERSION"
             curl -L "https://github.com/gembaadvantage/uplift/releases/download/${UPLIFT_VERSION}/uplift_${UPLIFT_VERSION#v}_linux-x86_64.tar.gz" | tar xz
             sudo mv uplift /usr/local/bin/
+            uplift version || echo "Uplift version check failed"
+            echo "::endgroup::"
 
             # Check if any tags exist
             tag_count=$(git tag -l | wc -l)
             echo "Found $tag_count existing tags"
             
             if [ "$tag_count" -eq 0 ]; then
-              echo "No existing tags found, this is the first release"
+              echo "::notice::No existing tags found, this is the first release"
               # For first release, determine version from commit messages
+              
+              echo "::group::Checking for feature commits"
+              git log --oneline | head -20
+              echo "::endgroup::"
+              
               if git log --oneline | grep -E "^[a-f0-9]+ feat" | head -1 | grep -q .; then
                 version="1.0.0"
-                echo "First release with features, using version: $version"
+                echo "::notice::First release with features, using version: $version"
               else
                 version="0.1.0"
-                echo "First release without features, using version: $version"
+                echo "::notice::First release without features, using version: $version"
               fi
             else
-              echo "Existing tags found, using uplift for version bump"
+              echo "::notice::Existing tags found, using uplift for version bump"
+              
+              # Debug: Show recent commits since last tag
+              echo "::group::Commits since last tag"
+              last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+              if [ -n "$last_tag" ]; then
+                echo "Last tag: $last_tag"
+                git log --oneline "$last_tag..HEAD" | head -20
+              else
+                echo "No previous tag found"
+              fi
+              echo "::endgroup::"
+              
+              # Validate uplift configuration
+              echo "::group::Validating uplift configuration"
+              if uplift config check 2>&1; then
+                echo "Uplift configuration is valid"
+              else
+                echo "::warning::Uplift configuration validation failed"
+              fi
+              echo "::endgroup::"
+              
               # Get next semantic version using uplift
-              output=$(uplift tag --dry-run --next 2>&1 || true)
+              echo "::group::Running uplift"
+              output=$(uplift tag --dry-run --next 2>&1) || {
+                exit_code=$?
+                echo "::error::Uplift failed with exit code $exit_code"
+                echo "Full output: $output"
+                
+                # If uplift fails, try to determine version manually
+                echo "::warning::Falling back to manual version detection"
+                
+                # Get the latest tag
+                latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+                latest_version=${latest_tag#v}
+                
+                # Parse version components
+                IFS='.' read -r major minor patch <<< "$latest_version"
+                
+                # Check commit messages since last tag for version bump type
+                if [ -n "$latest_tag" ] && [ "$latest_tag" != "v0.0.0" ]; then
+                  commits=$(git log --format=%s "$latest_tag..HEAD")
+                else
+                  commits=$(git log --format=%s)
+                fi
+                
+                # Determine version bump
+                if echo "$commits" | grep -qE "BREAKING CHANGE|!:"; then
+                  # Major version bump
+                  version="$((major + 1)).0.0"
+                  echo "::notice::Detected breaking change, bumping major version to $version"
+                elif echo "$commits" | grep -qE "^feat(\(.*\))?:"; then
+                  # Minor version bump
+                  version="$major.$((minor + 1)).0"
+                  echo "::notice::Detected feature, bumping minor version to $version"
+                elif echo "$commits" | grep -qE "^(fix|chore|docs|style|refactor|perf|test|ci|build)(\(.*\))?:"; then
+                  # Patch version bump
+                  version="$major.$minor.$((patch + 1))"
+                  echo "::notice::Detected fix/chore, bumping patch version to $version"
+                else
+                  echo "::warning::No conventional commits found since last tag"
+                  echo "::notice::No version bump needed based on commits"
+                  exit 0
+                fi
+              }
+              
               echo "Uplift output: $output"
+              echo "::endgroup::"
               
-              # Try multiple patterns to extract version
-              version=$(echo "$output" | grep -oE "v?[0-9]+\.[0-9]+\.[0-9]+" | tail -1 | sed 's/^v//')
-              
-              if [ -z "$version" ]; then
-                echo "No version bump needed based on commits"
-                exit 0
+              # Try to extract version from uplift output
+              if [ -z "${version:-}" ]; then
+                # Look for patterns like "Next version: v1.0.1" or just "v1.0.1"
+                version=$(echo "$output" | grep -oE "(Next version:|would tag as:)?\s*v?[0-9]+\.[0-9]+\.[0-9]+" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | tail -1)
+                
+                if [ -z "$version" ]; then
+                  # Try to find any version number in the output
+                  version=$(echo "$output" | grep -oE "v?[0-9]+\.[0-9]+\.[0-9]+" | tail -1 | sed 's/^v//')
+                fi
+                
+                if [ -z "$version" ]; then
+                  echo "::error::Could not extract version from uplift output"
+                  echo "::notice::No version bump needed based on commits"
+                  exit 0
+                fi
               fi
 
-              echo "Next version determined: $version"
+              echo "::notice::Next version determined: $version"
             fi
           fi
 
+          # Final validation
+          if [ -z "$version" ]; then
+            echo "::error::No version determined"
+            exit 1
+          fi
+          
+          # Validate version format
+          if ! echo "$version" | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+$"; then
+            echo "::error::Invalid version format: $version"
+            exit 1
+          fi
+          
+          echo "::notice::Final version: $version"
           echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Create git tag

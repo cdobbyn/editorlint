@@ -308,10 +308,19 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.version.outputs.version != '' && github.event.inputs.dry_run != 'true'
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ vars.DOBBOBOT_APP_ID }}
+          installation_id: ${{ vars.DOBBOBOT_APP_INSTALLATION_ID }}
+          private_key: ${{ secrets.DOBBOBOT_APP_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: main
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Get release info
         id: release
@@ -348,3 +357,5 @@ jobs:
           git add Formula/editorlint.rb
           git commit -m "chore: update Homebrew formula to ${{ steps.release.outputs.VERSION }}"
           git push
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

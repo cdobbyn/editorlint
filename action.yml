@@ -78,8 +78,33 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Set OS name (Windows)
+      id: os-windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        "name=windows" >> $env:GITHUB_OUTPUT
+
+    - name: Set OS name (Unix)
+      id: os-unix
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        case "${{ runner.os }}" in
+          "Linux")
+            echo "name=linux" >> $GITHUB_OUTPUT
+            ;;
+          "macOS")
+            echo "name=macos" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "Unsupported OS: ${{ runner.os }}"
+            exit 1
+            ;;
+        esac
+
     - name: Run EditorConfig Lint
-      uses: ./action-${{ lower(runner.os) }}.yml
+      uses: ./action-${{ steps.os-windows.outputs.name || steps.os-unix.outputs.name }}.yml
       with:
         version: ${{ inputs.version }}
         path: ${{ inputs.path }}

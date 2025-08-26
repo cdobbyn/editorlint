@@ -81,17 +81,21 @@ runs:
     - name: Build editorlint
       shell: bash
       run: |
-        # Convert Windows path to Unix-style for bash compatibility
-        ACTION_PATH="${{ github.action_path }}"
-        ACTION_PATH=$(echo "$ACTION_PATH" | sed 's|\\|/|g')
-        cd "$ACTION_PATH"
-        go build -o editorlint cmd/editorlint/main.go
+        # Navigate to action directory using GitHub's normalized path
+        cd "${{ github.action_path }}"
+        
+        # Build binary with platform-appropriate extension
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          go build -o editorlint.exe cmd/editorlint/main.go
+        else
+          go build -o editorlint cmd/editorlint/main.go
+        fi
 
     - name: Run editorlint
       id: lint
       shell: bash
       run: |
-        cd ${{ github.workspace }}
+        cd "${{ github.workspace }}"
 
         # Build command arguments
         ARGS=()
@@ -124,10 +128,16 @@ runs:
 
         # Run editorlint and capture output
         set +e  # Don't exit on non-zero return code
-        # Convert Windows path to Unix-style for bash compatibility
-        ACTION_PATH="${{ github.action_path }}"
-        ACTION_PATH=$(echo "$ACTION_PATH" | sed 's|\\|/|g')
-        OUTPUT=$("$ACTION_PATH/editorlint" "${ARGS[@]}" 2>&1)
+        
+        # Determine binary name based on OS
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          BINARY_NAME="editorlint.exe"
+        else
+          BINARY_NAME="editorlint"
+        fi
+        
+        # Execute the binary from the action directory
+        OUTPUT=$("${{ github.action_path }}/$BINARY_NAME" "${ARGS[@]}" 2>&1)
         EXIT_CODE=$?
         set -e
 

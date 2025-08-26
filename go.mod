@@ -1,4 +1,4 @@
-module github.com/cdobbyn/editorlint
+module github.com/dobbo-ca/editorlint
 
 go 1.25.0
 

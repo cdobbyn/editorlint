@@ -3,7 +3,7 @@ package rules
 import (
   "testing"
 
-  "github.com/cdobbyn/editorlint/pkg/config"
+  "github.com/dobbo-ca/editorlint/pkg/config"
 )
 
 func TestValidateInsertFinalNewline(t *testing.T) {

@@ -4,7 +4,7 @@ package rules
 import (
   "fmt"
 
-  "github.com/cdobbyn/editorlint/pkg/config"
+  "github.com/dobbo-ca/editorlint/pkg/config"
 )
 
 // ValidateInsertFinalNewline checks if the file ends with the appropriate newline character(s)

@@ -5,9 +5,9 @@ class Editorlint < Formula
   head "https://github.com/cdobbyn/editorlint.git", branch: "main"
 
   # This will be updated automatically by the release workflow
-  url "https://github.com/cdobbyn/editorlint/archive/refs/tags/1.3.9.tar.gz"
-  sha256 "ebec048ea0bed673792b658ee723c84972d0d3fb8673fd0c4e5d0072a0f27ed5"
-  version "1.3.9"
+  url "https://github.com/cdobbyn/editorlint/archive/refs/tags/1.3.10.tar.gz"
+  sha256 "4db64ca1b0b7dee2554cfddbac0814a44d4a76bbd860be76eefaa1ce61c0c3ae"
+  version "1.3.10"
 
   depends_on "go" => :build
 

@@ -41,7 +41,8 @@ jobs:
             echo "Using forced version: $version"
           else
             # Install uplift
-            curl -L https://github.com/gembaadvantage/uplift/releases/latest/download/uplift_linux_x86_64.tar.gz | tar xz
+            UPLIFT_VERSION=$(curl -s https://api.github.com/repos/gembaadvantage/uplift/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            curl -L "https://github.com/gembaadvantage/uplift/releases/download/${UPLIFT_VERSION}/uplift_${UPLIFT_VERSION#v}_linux-x86_64.tar.gz" | tar xz
             sudo mv uplift /usr/local/bin/
             
             # Check if any tags exist

@@ -48,8 +48,8 @@ type Config struct {
   // Quiet enables minimal output mode
   Quiet            bool
 
-  // IgnorePatterns specifies glob patterns for files/directories to ignore
-  IgnorePatterns   []string
+  // ExcludePatterns specifies glob patterns for files/directories to exclude
+  ExcludePatterns  []string
 }
 
 // Validator handles file validation and fixing according to EditorConfig rules.
@@ -743,14 +743,14 @@ func (v *Validator) validateSingleFileSync(filePath string) []rules.ValidationEr
 
 // shouldIgnore checks if a file path should be ignored based on ignore patterns
 func (v *Validator) shouldIgnore(filePath string) bool {
-  if len(v.config.IgnorePatterns) == 0 {
+  if len(v.config.ExcludePatterns) == 0 {
     return false
   }
 
   // Convert to forward slashes for consistent matching across platforms
   normalizedPath := filepath.ToSlash(filePath)
 
-  for _, pattern := range v.config.IgnorePatterns {
+  for _, pattern := range v.config.ExcludePatterns {
     // Convert glob pattern to regex for more powerful matching
     regexPattern, err := config.ConvertPatternToRegex(pattern)
     if err != nil {

@@ -76,7 +76,7 @@ jobs:
           recurse: true
           output-format: 'tabular'
           fail-on-violations: false
-          ignore-patterns: 'test_ignore/**,.git/**'
+          exclude: 'test_ignore/**,.git/**'
         id: validate
 
       - name: Check outputs

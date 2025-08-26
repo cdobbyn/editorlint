@@ -5,6 +5,33 @@ branding:
   color: 'green'
 
 inputs:
+  # Expected parameters from proscia-techops workflows
+  fix:
+    description: 'Automatically fix violations instead of just reporting them'
+    required: false
+    default: 'false'
+
+  config:
+    description: 'Path to custom .editorconfig file (optional)'
+    required: false
+    default: ''
+
+  exclude:
+    description: 'Comma-separated list of glob patterns to ignore (e.g. "*.tmp,node_modules/**")'
+    required: false
+    default: ''
+
+  reporter:
+    description: 'Output format: default, tabular, json, quiet, github'
+    required: false
+    default: 'default'
+
+  token:
+    description: 'GitHub token for API access (when using github reporter)'
+    required: false
+    default: ''
+
+  # Additional parameters for flexibility
   version:
     description: 'Version of editorlint to use (e.g. "1.0.0" or "latest")'
     required: false
@@ -15,25 +42,10 @@ inputs:
     required: false
     default: '.'
 
-  config-file:
-    description: 'Path to custom .editorconfig file (optional)'
-    required: false
-    default: ''
-
   recurse:
     description: 'Process files recursively in directories'
     required: false
     default: 'true'
-
-  fix:
-    description: 'Automatically fix violations instead of just reporting them'
-    required: false
-    default: 'false'
-
-  output-format:
-    description: 'Output format: default, tabular, json, quiet'
-    required: false
-    default: 'default'
 
   fail-on-violations:
     description: 'Fail the action if violations are found'
@@ -60,10 +72,16 @@ inputs:
     required: false
     default: 'github-actions[bot]@users.noreply.github.com'
 
-  ignore-patterns:
-    description: 'Comma-separated list of glob patterns to ignore (e.g. "*.tmp,node_modules/**")'
+  # Legacy parameter names for backward compatibility
+  config-file:
+    description: 'Path to custom .editorconfig file (legacy - use config instead)'
     required: false
     default: ''
+
+  output-format:
+    description: 'Output format (legacy - use reporter instead)'
+    required: false
+    default: 'default'
 
 outputs:
   violations-found:
@@ -78,43 +96,53 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Set OS name (Windows)
-      id: os-windows
+    - name: Run EditorConfig Lint (Windows)
       if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        "name=windows" >> $env:GITHUB_OUTPUT
-
-    - name: Set OS name (Unix)
-      id: os-unix
-      if: runner.os != 'Windows'
-      shell: bash
-      run: |
-        case "${{ runner.os }}" in
-          "Linux")
-            echo "name=linux" >> $GITHUB_OUTPUT
-            ;;
-          "macOS")
-            echo "name=macos" >> $GITHUB_OUTPUT
-            ;;
-          *)
-            echo "Unsupported OS: ${{ runner.os }}"
-            exit 1
-            ;;
-        esac
-
-    - name: Run EditorConfig Lint
-      uses: ./action-${{ steps.os-windows.outputs.name || steps.os-unix.outputs.name }}.yml
+      uses: ./action-windows.yml
       with:
         version: ${{ inputs.version }}
         path: ${{ inputs.path }}
-        config-file: ${{ inputs.config-file }}
+        config-file: ${{ inputs.config-file || inputs.config }}
         recurse: ${{ inputs.recurse }}
         fix: ${{ inputs.fix }}
-        output-format: ${{ inputs.output-format }}
+        output-format: ${{ inputs.output-format || inputs.reporter }}
         fail-on-violations: ${{ inputs.fail-on-violations }}
         auto-commit: ${{ inputs.auto-commit }}
         commit-message: ${{ inputs.commit-message }}
         git-user-name: ${{ inputs.git-user-name }}
         git-user-email: ${{ inputs.git-user-email }}
-        ignore-patterns: ${{ inputs.ignore-patterns }}
+        ignore-patterns: ${{ inputs.exclude }}
+
+    - name: Run EditorConfig Lint (Linux)
+      if: runner.os == 'Linux'
+      uses: ./action-linux.yml
+      with:
+        version: ${{ inputs.version }}
+        path: ${{ inputs.path }}
+        config-file: ${{ inputs.config-file || inputs.config }}
+        recurse: ${{ inputs.recurse }}
+        fix: ${{ inputs.fix }}
+        output-format: ${{ inputs.output-format || inputs.reporter }}
+        fail-on-violations: ${{ inputs.fail-on-violations }}
+        auto-commit: ${{ inputs.auto-commit }}
+        commit-message: ${{ inputs.commit-message }}
+        git-user-name: ${{ inputs.git-user-name }}
+        git-user-email: ${{ inputs.git-user-email }}
+        ignore-patterns: ${{ inputs.exclude }}
+
+    - name: Run EditorConfig Lint (macOS)
+      if: runner.os == 'macOS'
+      uses: ./action-macos.yml
+      with:
+        version: ${{ inputs.version }}
+        path: ${{ inputs.path }}
+        config-file: ${{ inputs.config-file || inputs.config }}
+        recurse: ${{ inputs.recurse }}
+        fix: ${{ inputs.fix }}
+        output-format: ${{ inputs.output-format || inputs.reporter }}
+        fail-on-violations: ${{ inputs.fail-on-violations }}
+        auto-commit: ${{ inputs.auto-commit }}
+        commit-message: ${{ inputs.commit-message }}
+        git-user-name: ${{ inputs.git-user-name }}
+        git-user-email: ${{ inputs.git-user-email }}
+        ignore-patterns: ${{ inputs.exclude }}

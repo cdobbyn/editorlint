@@ -128,7 +128,7 @@ runs:
           IFS=',' read -ra PATTERNS <<< "${{ inputs.ignore-patterns }}"
           for pattern in "${PATTERNS[@]}"; do
             trimmed_pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            ARGS+=("--ignore" "$trimmed_pattern")
+            ARGS+=("--exclude" "$trimmed_pattern")
           done
         fi
 

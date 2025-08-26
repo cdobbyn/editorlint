@@ -1,0 +1,42 @@
+bumps:
+  - file: go.mod
+    regex: "^module github.com/cdobbyn/editorlint$"
+    replace: "module github.com/cdobbyn/editorlint"
+
+  - file: action.yml  
+    regex: "name: 'EditorConfig Lint'"
+    replace: "name: 'EditorConfig Lint'"
+
+git:
+  ignoreDetached: false
+  commitAuthor:
+    name: "github-actions[bot]"
+    email: "github-actions[bot]@users.noreply.github.com"
+  commitMessage: "chore: release v{{.Next}}"
+
+changelog:
+  out: CHANGELOG.md
+
+env:
+  - name: GITHUB_TOKEN
+    required: true
+
+commits:
+  major:
+    - "BREAKING CHANGE"
+    - "!:"
+  minor:
+    - "feat"
+    - "feature"
+  patch:
+    - "fix"
+    - "bug"
+    - "patch"
+    - "chore"
+    - "docs"
+    - "style"
+    - "refactor"
+    - "perf"
+    - "test"
+    - "ci"
+    - "build"

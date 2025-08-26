@@ -46,10 +46,13 @@ jobs:
             sudo mv uplift /usr/local/bin/
 
             # Check if any tags exist
-            if ! git tag -l | grep -q .; then
+            tag_count=$(git tag -l | wc -l)
+            echo "Found $tag_count existing tags"
+            
+            if [ "$tag_count" -eq 0 ]; then
               echo "No existing tags found, this is the first release"
               # For first release, determine version from commit messages
-              if git log --oneline --grep="feat" | head -1 | grep -q .; then
+              if git log --oneline | grep -E "^[a-f0-9]+ feat" | head -1 | grep -q .; then
                 version="1.0.0"
                 echo "First release with features, using version: $version"
               else
@@ -57,10 +60,14 @@ jobs:
                 echo "First release without features, using version: $version"
               fi
             else
+              echo "Existing tags found, using uplift for version bump"
               # Get next semantic version using uplift
-              output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
-              version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
-
+              output=$(uplift tag --dry-run --next 2>&1 || true)
+              echo "Uplift output: $output"
+              
+              # Try multiple patterns to extract version
+              version=$(echo "$output" | grep -oE "v?[0-9]+\.[0-9]+\.[0-9]+" | tail -1 | sed 's/^v//')
+              
               if [ -z "$version" ]; then
                 echo "No version bump needed based on commits"
                 exit 0

@@ -110,7 +110,7 @@ func TestConvertPatternToRegex(t *testing.T) {
     pattern  string
     expected string
   }{
-    {"*", "^[^/]*$"},
+    {"*", "^.*$"},              // * behaves like ** for EditorConfig compatibility
     {"*.go", "^[^/]*\\.go$"},
     {"**", "^.*$"},
     {"src/**", "^src/.*$"},

@@ -28,6 +28,7 @@ jobs:
           auto-commit: true
           commit-message: 'style: auto-fix editorconfig violations'
           fail-on-violations: false
+          ignore-patterns: 'test_ignore/**,.git/**'
         id: autofix
 
       - name: Summary

@@ -55,6 +55,11 @@ inputs:
     required: false
     default: 'github-actions[bot]@users.noreply.github.com'
 
+  ignore-patterns:
+    description: 'Comma-separated list of glob patterns to ignore (e.g. "*.tmp,node_modules/**")'
+    required: false
+    default: ''
+
 outputs:
   violations-found:
     description: 'Whether any violations were found (true/false)'
@@ -103,6 +108,13 @@ runs:
 
         if [ "${{ inputs.output-format }}" != "default" ]; then
           ARGS+=("--output" "${{ inputs.output-format }}")
+        fi
+
+        if [ "${{ inputs.ignore-patterns }}" != "" ]; then
+          IFS=',' read -ra PATTERNS <<< "${{ inputs.ignore-patterns }}"
+          for pattern in "${PATTERNS[@]}"; do
+            ARGS+=("--ignore" "$(echo "$pattern" | xargs)")  # xargs trims whitespace
+          done
         fi
 
         # Run editorlint and capture output

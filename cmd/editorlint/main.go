@@ -15,6 +15,7 @@ var (
   outputFlag     string
   workersFlag    int
   quietFlag      bool
+  ignoreFlag     []string
 )
 
 var rootCmd = &cobra.Command{
@@ -33,6 +34,7 @@ var rootCmd = &cobra.Command{
       OutputFormat:     outputFlag,
       Workers:          workersFlag,
       Quiet:            quietFlag,
+      IgnorePatterns:   ignoreFlag,
     })
 
     err := v.ValidateTarget(target)
@@ -50,6 +52,7 @@ func init() {
   rootCmd.Flags().StringVarP(&outputFlag, "output", "o", "default", "Output format: default, tabular, json, quiet")
   rootCmd.Flags().IntVarP(&workersFlag, "workers", "w", 0, "Number of parallel workers (0 = auto-detect)")
   rootCmd.Flags().BoolVarP(&quietFlag, "quiet", "q", false, "Quiet mode - minimal output")
+  rootCmd.Flags().StringArrayVarP(&ignoreFlag, "ignore", "i", []string{}, "Ignore files matching glob patterns (can be specified multiple times)")
 }
 
 func main() {

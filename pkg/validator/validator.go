@@ -14,6 +14,7 @@ import (
   "fmt"
   "os"
   "path/filepath"
+  "regexp"
   "runtime"
   "strings"
   "sync"
@@ -46,6 +47,9 @@ type Config struct {
 
   // Quiet enables minimal output mode
   Quiet            bool
+
+  // IgnorePatterns specifies glob patterns for files/directories to ignore
+  IgnorePatterns   []string
 }
 
 // Validator handles file validation and fixing according to EditorConfig rules.
@@ -218,6 +222,10 @@ func (v *Validator) validateFiles(directory string) ([]rules.ValidationError, er
 
     // Skip directories
     if info.IsDir() {
+      // Check if directory should be ignored
+      if v.shouldIgnore(path) {
+        return filepath.SkipDir
+      }
       // If not recursive, skip subdirectories
       if !v.config.Recursive && path != directory {
         return filepath.SkipDir
@@ -232,6 +240,11 @@ func (v *Validator) validateFiles(directory string) ([]rules.ValidationError, er
 
     // Skip hidden files and directories (optional - could be configurable)
     if strings.HasPrefix(info.Name(), ".") {
+      return nil
+    }
+
+    // Check if file should be ignored
+    if v.shouldIgnore(path) {
       return nil
     }
 
@@ -416,6 +429,10 @@ func (v *Validator) fixFiles(directory string) ([]string, error) {
 
     // Skip directories
     if info.IsDir() {
+      // Check if directory should be ignored
+      if v.shouldIgnore(path) {
+        return filepath.SkipDir
+      }
       // If not recursive, skip subdirectories
       if !v.config.Recursive && path != directory {
         return filepath.SkipDir
@@ -430,6 +447,11 @@ func (v *Validator) fixFiles(directory string) ([]string, error) {
 
     // Skip hidden files and directories (optional - could be configurable)
     if strings.HasPrefix(info.Name(), ".") {
+      return nil
+    }
+
+    // Check if file should be ignored
+    if v.shouldIgnore(path) {
       return nil
     }
 
@@ -667,6 +689,10 @@ func (v *Validator) collectFiles(directory string) ([]FileJob, error) {
 
     // Skip directories
     if info.IsDir() {
+      // Check if directory should be ignored
+      if v.shouldIgnore(path) {
+        return filepath.SkipDir
+      }
       // If not recursive, skip subdirectories
       if !v.config.Recursive && path != directory {
         return filepath.SkipDir
@@ -681,6 +707,11 @@ func (v *Validator) collectFiles(directory string) ([]FileJob, error) {
 
     // Skip hidden files and directories
     if strings.HasPrefix(info.Name(), ".") {
+      return nil
+    }
+
+    // Check if file should be ignored
+    if v.shouldIgnore(path) {
       return nil
     }
 
@@ -708,4 +739,40 @@ func (v *Validator) validateSingleFileSync(filePath string) []rules.ValidationEr
     }}
   }
   return errors
+}
+
+// shouldIgnore checks if a file path should be ignored based on ignore patterns
+func (v *Validator) shouldIgnore(filePath string) bool {
+  if len(v.config.IgnorePatterns) == 0 {
+    return false
+  }
+
+  // Convert to forward slashes for consistent matching across platforms
+  normalizedPath := filepath.ToSlash(filePath)
+
+  for _, pattern := range v.config.IgnorePatterns {
+    // Convert glob pattern to regex for more powerful matching
+    regexPattern, err := config.ConvertPatternToRegex(pattern)
+    if err != nil {
+      continue // Skip invalid patterns
+    }
+
+    // Check if the path matches the regex pattern
+    matched, err := regexp.MatchString(regexPattern, normalizedPath)
+    if err == nil && matched {
+      return true
+    }
+
+    // Also check relative paths (remove leading directories)
+    pathParts := strings.Split(normalizedPath, "/")
+    for i := 0; i < len(pathParts); i++ {
+      relativePath := strings.Join(pathParts[i:], "/")
+      matched, err := regexp.MatchString(regexPattern, relativePath)
+      if err == nil && matched {
+        return true
+      }
+    }
+  }
+
+  return false
 }

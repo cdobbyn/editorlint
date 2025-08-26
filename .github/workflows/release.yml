@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - 'README.md'
       - 'docs/**'
+      - 'Formula/**'
     tags-ignore:
       - 'v*.*.*'
   workflow_dispatch:

@@ -3,6 +3,8 @@ name: Editorlint
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'Formula/**'
   pull_request:
     branches: [ main ]
 

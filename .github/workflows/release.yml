@@ -7,6 +7,7 @@ on:
       - 'README.md'
       - 'docs/**'
       - 'Formula/**'
+      - '.github/**'
     tags-ignore:
       - 'v*.*.*'
   workflow_dispatch:
@@ -23,187 +24,129 @@ permissions:
   contents: write
 
 jobs:
-  version:
+  semantic-release:
+    name: Semantic Release with Uplift
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      changelog: ${{ steps.changelog.outputs.content }}
+      new-release-published: ${{ steps.check.outputs.should-release == 'true' && inputs.dry_run != true }}
+      new-release-version: ${{ steps.check.outputs.version }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine next version
+      - name: Install Uplift
+        if: inputs.force_version == ''
+        uses: gembaadvantage/uplift-action@v2
+        with:
+          install-only: true
+          args: --version
+
+      - name: Determine Next Version with Uplift
         id: version
+        if: inputs.force_version == ''
         run: |
-          set -e  # Exit on error
-          
-          # Debug logging
-          echo "::group::Git Information"
-          echo "Current branch: $(git branch --show-current)"
-          echo "Latest commit: $(git log -1 --oneline)"
-          echo "All tags:"
-          git tag -l || echo "No tags found"
-          echo "::endgroup::"
-          
-          if [ -n "${{ github.event.inputs.force_version }}" ]; then
-            version="${{ github.event.inputs.force_version }}"
-            echo "Using forced version: $version"
+          # Run uplift and capture output
+          output=$(uplift tag --dry-run --no-prefix --next 2>&1 || true)
+          echo "$output"
+
+          # Extract version from "identified next semantic version version=X.Y.Z" format
+          version=$(echo "$output" | grep "identified next semantic version" | sed -n 's/.*version=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
+
+          if [ -n "$version" ]; then
+            echo "Detected next version: $version"
+            echo "version=$version" >> $GITHUB_OUTPUT
           else
-            # Install uplift
-            echo "::group::Installing uplift"
-            UPLIFT_VERSION=$(curl -s https://api.github.com/repos/gembaadvantage/uplift/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-            echo "Installing uplift version: $UPLIFT_VERSION"
-            curl -L "https://github.com/gembaadvantage/uplift/releases/download/${UPLIFT_VERSION}/uplift_${UPLIFT_VERSION#v}_linux-x86_64.tar.gz" | tar xz
-            sudo mv uplift /usr/local/bin/
-            uplift version || echo "Uplift version check failed"
-            echo "::endgroup::"
-
-            # Check if any tags exist
-            tag_count=$(git tag -l | wc -l)
-            echo "Found $tag_count existing tags"
-            
-            if [ "$tag_count" -eq 0 ]; then
-              echo "::notice::No existing tags found, this is the first release"
-              # For first release, determine version from commit messages
-              
-              echo "::group::Checking for feature commits"
-              git log --oneline | head -20
-              echo "::endgroup::"
-              
-              if git log --oneline | grep -E "^[a-f0-9]+ feat" | head -1 | grep -q .; then
-                version="1.0.0"
-                echo "::notice::First release with features, using version: $version"
-              else
-                version="0.1.0"
-                echo "::notice::First release without features, using version: $version"
-              fi
-            else
-              echo "::notice::Existing tags found, using uplift for version bump"
-              
-              # Debug: Show recent commits since last tag
-              echo "::group::Commits since last tag"
-              last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-              if [ -n "$last_tag" ]; then
-                echo "Last tag: $last_tag"
-                git log --oneline "$last_tag..HEAD" | head -20
-              else
-                echo "No previous tag found"
-              fi
-              echo "::endgroup::"
-              
-              # Validate uplift configuration
-              echo "::group::Validating uplift configuration"
-              if uplift config check 2>&1; then
-                echo "Uplift configuration is valid"
-              else
-                echo "::warning::Uplift configuration validation failed"
-              fi
-              echo "::endgroup::"
-              
-              # Get next semantic version using uplift
-              echo "::group::Running uplift"
-              output=$(uplift tag --dry-run --next 2>&1) || {
-                exit_code=$?
-                echo "::error::Uplift failed with exit code $exit_code"
-                echo "Full output: $output"
-                
-                # If uplift fails, try to determine version manually
-                echo "::warning::Falling back to manual version detection"
-                
-                # Get the latest tag
-                latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-                latest_version=${latest_tag#v}
-                
-                # Parse version components
-                IFS='.' read -r major minor patch <<< "$latest_version"
-                
-                # Check commit messages since last tag for version bump type
-                if [ -n "$latest_tag" ] && [ "$latest_tag" != "v0.0.0" ]; then
-                  commits=$(git log --format=%s "$latest_tag..HEAD")
-                else
-                  commits=$(git log --format=%s)
-                fi
-                
-                # Determine version bump
-                if echo "$commits" | grep -qE "BREAKING CHANGE|!:"; then
-                  # Major version bump
-                  version="$((major + 1)).0.0"
-                  echo "::notice::Detected breaking change, bumping major version to $version"
-                elif echo "$commits" | grep -qE "^feat(\(.*\))?:"; then
-                  # Minor version bump
-                  version="$major.$((minor + 1)).0"
-                  echo "::notice::Detected feature, bumping minor version to $version"
-                elif echo "$commits" | grep -qE "^(fix|chore|docs|style|refactor|perf|test|ci|build)(\(.*\))?:"; then
-                  # Patch version bump
-                  version="$major.$minor.$((patch + 1))"
-                  echo "::notice::Detected fix/chore, bumping patch version to $version"
-                else
-                  echo "::warning::No conventional commits found since last tag"
-                  echo "::notice::No version bump needed based on commits"
-                  exit 0
-                fi
-              }
-              
-              echo "Uplift output: $output"
-              echo "::endgroup::"
-              
-              # Try to extract version from uplift output
-              if [ -z "${version:-}" ]; then
-                # Look for patterns like "Next version: v1.0.1" or just "v1.0.1"
-                version=$(echo "$output" | grep -oE "(Next version:|would tag as:)?\s*v?[0-9]+\.[0-9]+\.[0-9]+" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | tail -1)
-                
-                if [ -z "$version" ]; then
-                  # Try to find any version number in the output
-                  version=$(echo "$output" | grep -oE "v?[0-9]+\.[0-9]+\.[0-9]+" | tail -1 | sed 's/^v//')
-                fi
-                
-                if [ -z "$version" ]; then
-                  echo "::error::Could not extract version from uplift output"
-                  echo "::notice::No version bump needed based on commits"
-                  exit 0
-                fi
-              fi
-
-              echo "::notice::Next version determined: $version"
-            fi
+            echo "No version detected from uplift output"
+            echo "version=" >> $GITHUB_OUTPUT
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          # Final validation
-          if [ -z "$version" ]; then
-            echo "::error::No version determined"
-            exit 1
-          fi
-          
-          # Validate version format
-          if ! echo "$version" | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+$"; then
-            echo "::error::Invalid version format: $version"
-            exit 1
-          fi
-          
-          echo "::notice::Final version: $version"
-          echo "version=$version" >> $GITHUB_OUTPUT
-
-      - name: Create git tag
-        if: steps.version.outputs.version != '' && github.event.inputs.dry_run != 'true'
+      - name: Check for New Release
+        id: check
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.version }}" -m "${{ steps.version.outputs.version }}"
-          git push origin "${{ steps.version.outputs.version }}"
+          if [ -n "${{ inputs.force_version }}" ]; then
+            echo "Manual version specified: ${{ inputs.force_version }}"
+            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "version=${{ inputs.force_version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.version.outputs.version }}" ]; then
+            echo "New version determined: ${{ steps.version.outputs.version }}"
+            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "version=${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "No new version to release"
+            echo "should-release=false" >> $GITHUB_OUTPUT
+            echo "version=" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Generate changelog
+      - name: Create Git Tag with Uplift
+        id: uplift
+        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
+        uses: gembaadvantage/uplift-action@v2
+        with:
+          args: tag --no-prefix
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create git-cliff config
+        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
+        run: |
+          cat > cliff.toml << 'EOF'
+          [changelog]
+          body = """
+          {% for group, commits in commits | group_by(attribute="group") %}
+          ### {{ group | trim }}
+          {% for commit in commits %}
+          - {{ commit.message | upper_first }}\
+          {% endfor %}
+          {% endfor %}\n
+          """
+          trim = true
+
+          [git]
+          conventional_commits = true
+          filter_unconventional = true
+          commit_parsers = [
+              { message = "^feat", group = "🚀 Features" },
+              { message = "^fix", group = "🐛 Bug Fixes" },
+              { message = "^doc", group = "📚 Documentation" },
+              { message = "^perf", group = "⚡ Performance" },
+              { message = "^refactor", group = "♻️ Refactor" },
+              { message = "^style", group = "🎨 Styling" },
+              { message = "^test", group = "🧪 Testing" },
+              { message = "^chore", group = "🔧 Miscellaneous Tasks" },
+              { message = "^ci", group = "🔧 Miscellaneous Tasks" },
+              { body = ".*security", group = "🔒 Security" },
+              { message = "^revert", group = "⏪ Revert" },
+          ]
+          filter_commits = false
+          topo_order = false
+          sort_commits = "oldest"
+          EOF
+
+      - name: Generate Release Notes with git-cliff
         id: changelog
-        if: steps.version.outputs.version != ''
+        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --verbose --tag ${{ steps.version.outputs.version }}
+          args: --verbose --latest
+
+      - name: Create GitHub Release
+        id: github-release
+        if: steps.check.outputs.should-release == 'true' && inputs.dry_run != true
+        run: |
+          gh release create "${{ steps.check.outputs.version }}" \
+            --title "v${{ steps.check.outputs.version }}" \
+            --notes "${{ steps.changelog.outputs.content }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    needs: version
-    if: needs.version.outputs.version != ''
+    needs: semantic-release
+    if: needs.semantic-release.outputs.new-release-published == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -229,11 +172,12 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Build binary
+      - name: Build binary and upload to release
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          VERSION: ${{ needs.version.outputs.version }}
+          VERSION: ${{ needs.semantic-release.outputs.new-release-version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p dist
           if [ "$GOOS" = "windows" ]; then
@@ -250,72 +194,29 @@ jobs:
             # Install zip if not available
             sudo apt-get update && sudo apt-get install -y zip
             cd dist && zip "../${ARCHIVE_NAME}.zip" "${BINARY_NAME}" && cd ..
+            ARCHIVE_FILE="${ARCHIVE_NAME}.zip"
           else
             tar -czf "${ARCHIVE_NAME}.tar.gz" -C dist "${BINARY_NAME}"
+            ARCHIVE_FILE="${ARCHIVE_NAME}.tar.gz"
           fi
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: editorlint-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            *.tar.gz
-            *.zip
+          # Generate checksum for this archive
+          sha256sum "${ARCHIVE_FILE}" > "${ARCHIVE_FILE}.sha256"
 
-  create-release:
-    needs: [version, build]
-    runs-on: ubuntu-latest
-    if: needs.version.outputs.version != ''
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Move artifacts to root
-        run: |
-          find artifacts -name "*.tar.gz" -o -name "*.zip" | xargs -I {} mv {} .
-
-      - name: Generate checksums
-        run: |
-          sha256sum *.tar.gz *.zip > checksums.txt
-
-      - name: Create GitHub release
-        if: github.event.inputs.dry_run != 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.version.outputs.version }}
-          name: v${{ needs.version.outputs.version }}
-          body: ${{ needs.version.outputs.changelog }}
-          draft: false
-          prerelease: false
-          files: |
-            *.tar.gz
-            *.zip
-            checksums.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Dry run summary
-        if: github.event.inputs.dry_run == 'true'
-        run: |
-          echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Release Notes:**" >> $GITHUB_STEP_SUMMARY
-          echo "${{ needs.version.outputs.changelog }}" >> $GITHUB_STEP_SUMMARY
+          # Upload archive and checksum to release
+          gh release upload "${VERSION}" "${ARCHIVE_FILE}" "${ARCHIVE_FILE}.sha256"
 
   update-homebrew:
-    needs: [version, create-release]
+    needs: [semantic-release, build]
     runs-on: ubuntu-latest
-    if: needs.version.outputs.version != '' && github.event.inputs.dry_run != 'true'
+    if: needs.semantic-release.outputs.new-release-published == 'true'
     steps:
       - name: Generate GitHub App token
         id: app-token
-        uses: tibdex/github-app-token@v2
+        uses: actions/create-github-app-token@v1
         with:
-          app_id: ${{ vars.DOBBOBOT_APP_ID }}
-          installation_id: ${{ vars.DOBBOBOT_APP_INSTALLATION_ID }}
-          private_key: ${{ secrets.DOBBOBOT_APP_PRIVATE_KEY }}
+          app-id: ${{ vars.DOBBOBOT_APP_ID }}
+          private-key: ${{ secrets.DOBBOBOT_APP_PRIVATE_KEY }}
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -326,9 +227,9 @@ jobs:
       - name: Get release info
         id: release
         run: |
-          VERSION=${{ needs.version.outputs.version }}
+          VERSION=${{ needs.semantic-release.outputs.new-release-version }}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          
+
           # Download the source tarball to calculate SHA256
           curl -L -o source.tar.gz "https://github.com/cdobbyn/editorlint/archive/refs/tags/${VERSION}.tar.gz"
           SHA256=$(sha256sum source.tar.gz | cut -d' ' -f1)
@@ -341,7 +242,7 @@ jobs:
             echo "Formula/editorlint.rb not found, skipping Homebrew update"
             exit 0
           fi
-          
+
           sed -i "s|url \".*\"|url \"https://github.com/cdobbyn/editorlint/archive/refs/tags/${{ steps.release.outputs.VERSION }}.tar.gz\"|" Formula/editorlint.rb
           sed -i "s|sha256 \".*\"|sha256 \"${{ steps.release.outputs.SHA256 }}\"|" Formula/editorlint.rb
           sed -i "s|version \".*\"|version \"${{ steps.release.outputs.VERSION }}\"|" Formula/editorlint.rb
@@ -352,7 +253,7 @@ jobs:
             echo "No changes to formula file"
             exit 0
           fi
-          
+
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add Formula/editorlint.rb

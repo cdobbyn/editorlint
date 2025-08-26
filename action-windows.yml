@@ -115,7 +115,7 @@ runs:
           $patterns = "${{ inputs.ignore-patterns }}".Split(',')
           foreach ($pattern in $patterns) {
             $trimmed = $pattern.Trim()
-            $ARGS += @("--ignore", $trimmed)
+            $ARGS += @("--exclude", $trimmed)
           }
         }
         

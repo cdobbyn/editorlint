@@ -63,6 +63,12 @@ editorlint -c custom.editorconfig .
 
 # Use custom config with single file
 editorlint -c custom.editorconfig src/main.go
+
+# Exclude specific files or patterns
+editorlint --exclude "*.tmp" --exclude "node_modules/**" .
+
+# Exclude with short flag
+editorlint -e "*.log" -e "build/" .
 ```
 
 ### Command Line Options
@@ -72,6 +78,10 @@ editorlint -c custom.editorconfig src/main.go
 | `--recurse` | `-r` | Scan directories recursively |
 | `--fix` | `-f` | Automatically fix validation errors |
 | `--config` | `-c` | Use specific .editorconfig file instead of searching hierarchy |
+| `--exclude` | `-e` | Exclude files matching glob patterns (can be specified multiple times) |
+| `--output` | `-o` | Output format: default, tabular, json, quiet |
+| `--workers` | `-w` | Number of parallel workers (0 = auto-detect) |
+| `--quiet` | `-q` | Quiet mode - minimal output |
 
 ### Target Types
 

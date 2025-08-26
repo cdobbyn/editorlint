@@ -113,7 +113,9 @@ runs:
         if [ "${{ inputs.ignore-patterns }}" != "" ]; then
           IFS=',' read -ra PATTERNS <<< "${{ inputs.ignore-patterns }}"
           for pattern in "${PATTERNS[@]}"; do
-            ARGS+=("--ignore" "$(echo "$pattern" | xargs)")  # xargs trims whitespace
+            # Trim whitespace without xargs (for Windows compatibility)
+            trimmed_pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            ARGS+=("--ignore" "$trimmed_pattern")
           done
         fi
 

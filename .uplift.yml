@@ -1,48 +1,28 @@
 # Uplift configuration for semantic versioning
 # Documentation: https://uplift.run/
 
-# Git configuration
-git:
-  # Ignore detached HEAD state (useful in CI)
-  ignoreDetached: false
-  # Disable GPG signing in CI
-  gpg: false
-  # Push changes back to the repository
-  push: false
-
-# Changelog generation
-changelog:
-  # Skip changelog generation (using git-cliff instead)
-  skip: true
-
-# Conventional commits configuration for semantic versioning
-conventionalCommits:
-  # Filter to only include conventional commits
-  filter: true
-  # Strict mode enforces conventional commit format
-  strict: false
-
 # Semantic versioning bumps based on commit types
 bumps:
-  # Major version bump patterns
-  major:
-    - "BREAKING CHANGE"
-    - "breaking"
-    - "!:"
+  # Major version bumps for breaking changes
+  - file: "**"
+    regex: "BREAKING CHANGE|!:"
+    type: "major"
   
-  # Minor version bump patterns  
-  minor:
-    - "feat"
-    - "feature"
-  
-  # Patch version bump patterns
-  patch:
-    - "fix"
-    - "chore"
-    - "docs" 
-    - "style"
-    - "refactor"
-    - "perf"
-    - "test"
-    - "ci"
-    - "build"
+  # Minor version bumps for new features
+  - file: "**"  
+    regex: "^feat|^feature"
+    type: "minor"
+    
+  # Patch version bumps for fixes and other changes
+  - file: "**"
+    regex: "^fix|^chore|^docs|^style|^refactor|^perf|^test|^ci|^build"
+    type: "patch"
+
+# Git configuration
+git:
+  ignoreDetached: false
+
+# Environment variables required
+env:
+  - name: "GITHUB_TOKEN"
+    required: true

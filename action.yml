@@ -94,7 +94,7 @@ runs:
         fi
         
         if [ "${{ inputs.recurse }}" = "true" ]; then
-          ARGS+=("--recursive")
+          ARGS+=("--recurse")
         fi
         
         if [ "${{ inputs.fix }}" = "true" ]; then

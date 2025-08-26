@@ -27,9 +27,19 @@ inputs:
     default: 'default'
 
   token:
-    description: 'GitHub token for API access (when using github reporter)'
+    description: 'GitHub token for API access (when using github reporter or pr-comment)'
     required: false
     default: ''
+
+  pr-comment:
+    description: 'Post PR comments with violation details (requires token)'
+    required: false
+    default: 'false'
+
+  pr-comment-header:
+    description: 'Header text for PR comments'
+    required: false
+    default: '## 📝 EditorConfig Lint Results'
 
   # Additional parameters for flexibility
   version:
@@ -112,6 +122,9 @@ runs:
         git-user-name: ${{ inputs.git-user-name }}
         git-user-email: ${{ inputs.git-user-email }}
         ignore-patterns: ${{ inputs.exclude }}
+        token: ${{ inputs.token }}
+        pr-comment: ${{ inputs.pr-comment }}
+        pr-comment-header: ${{ inputs.pr-comment-header }}
 
     - name: Run EditorConfig Lint (Linux)
       if: runner.os == 'Linux'
@@ -129,6 +142,9 @@ runs:
         git-user-name: ${{ inputs.git-user-name }}
         git-user-email: ${{ inputs.git-user-email }}
         ignore-patterns: ${{ inputs.exclude }}
+        token: ${{ inputs.token }}
+        pr-comment: ${{ inputs.pr-comment }}
+        pr-comment-header: ${{ inputs.pr-comment-header }}
 
     - name: Run EditorConfig Lint (macOS)
       if: runner.os == 'macOS'
@@ -146,3 +162,6 @@ runs:
         git-user-name: ${{ inputs.git-user-name }}
         git-user-email: ${{ inputs.git-user-email }}
         ignore-patterns: ${{ inputs.exclude }}
+        token: ${{ inputs.token }}
+        pr-comment: ${{ inputs.pr-comment }}
+        pr-comment-header: ${{ inputs.pr-comment-header }}

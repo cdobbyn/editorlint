@@ -50,6 +50,18 @@ inputs:
     description: 'Comma-separated list of glob patterns to ignore'
     required: false
     default: ''
+  token:
+    description: 'GitHub token for API access'
+    required: false
+    default: ''
+  pr-comment:
+    description: 'Post PR comments with violation details'
+    required: false
+    default: 'false'
+  pr-comment-header:
+    description: 'Header text for PR comments'
+    required: false
+    default: '## 📝 EditorConfig Lint Results'
 
 outputs:
   violations-found:
@@ -177,7 +189,91 @@ runs:
           fi
         fi
 
+        # Save outputs for PR comment step
+        echo "VIOLATIONS_FOUND=$VIOLATIONS_FOUND" >> $GITHUB_ENV
+        echo "FILES_PROCESSED=$FILES_PROCESSED" >> $GITHUB_ENV
+        echo "FILES_FIXED=$FILES_FIXED" >> $GITHUB_ENV
+        
+        # Save the raw output for PR comments (escape newlines)
+        {
+          echo "EDITORLINT_OUTPUT<<EOF"
+          echo "$OUTPUT"
+          echo "EOF"
+        } >> $GITHUB_ENV
+
         if [ "${{ inputs.fail-on-violations }}" = "true" ] && [ "$VIOLATIONS_FOUND" = "true" ] && [ "${{ inputs.fix }}" = "false" ]; then
           echo "Violations found and fail-on-violations is enabled"
           exit 1
+        fi
+
+    - name: Handle PR Comments
+      if: inputs.pr-comment == 'true' && inputs.token != '' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        PR_NUMBER="${{ github.event.number }}"
+        REPO_OWNER="${{ github.repository_owner }}"
+        REPO_NAME="${{ github.event.repository.name }}"
+        COMMENT_HEADER="${{ inputs.pr-comment-header }}"
+        
+        # Create comment body
+        if [ "$VIOLATIONS_FOUND" = "true" ]; then
+          if [ "$FILES_FIXED" != "0" ] && [ "${{ inputs.fix }}" = "true" ]; then
+            COMMENT_BODY="${COMMENT_HEADER}
+
+✅ **Fixed ${FILES_FIXED} files with EditorConfig violations**
+
+The following files were automatically fixed:
+\`\`\`
+${EDITORLINT_OUTPUT}
+\`\`\`
+
+Files processed: ${FILES_PROCESSED}
+Files fixed: ${FILES_FIXED}"
+          else
+            COMMENT_BODY="${COMMENT_HEADER}
+
+❌ **EditorConfig violations found**
+
+\`\`\`
+${EDITORLINT_OUTPUT}
+\`\`\`
+
+Files processed: ${FILES_PROCESSED}
+Violations found: ${VIOLATIONS_FOUND}
+
+Run with \`fix: true\` to automatically fix these issues."
+          fi
+        else
+          COMMENT_BODY="${COMMENT_HEADER}
+
+✅ **No EditorConfig violations found**
+
+Files processed: ${FILES_PROCESSED}
+All files comply with .editorconfig rules."
+        fi
+
+        # Check for existing comment
+        EXISTING_COMMENT_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+          "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/issues/$PR_NUMBER/comments" \
+          | jq -r ".[] | select(.body | startswith(\"$COMMENT_HEADER\")) | .id" \
+          | head -n 1)
+
+        if [ "$EXISTING_COMMENT_ID" != "" ] && [ "$EXISTING_COMMENT_ID" != "null" ]; then
+          # Update existing comment
+          echo "Updating existing PR comment (ID: $EXISTING_COMMENT_ID)"
+          curl -s -X PATCH \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"body\": $(echo "$COMMENT_BODY" | jq -R -s .)}" \
+            "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/issues/comments/$EXISTING_COMMENT_ID"
+        else
+          # Create new comment
+          echo "Creating new PR comment"
+          curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"body\": $(echo "$COMMENT_BODY" | jq -R -s .)}" \
+            "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/issues/$PR_NUMBER/comments"
         fi

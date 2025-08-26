@@ -50,6 +50,18 @@ inputs:
     description: 'Comma-separated list of glob patterns to ignore'
     required: false
     default: ''
+  token:
+    description: 'GitHub token for API access'
+    required: false
+    default: ''
+  pr-comment:
+    description: 'Post PR comments with violation details'
+    required: false
+    default: 'false'
+  pr-comment-header:
+    description: 'Header text for PR comments'
+    required: false
+    default: '## 📝 EditorConfig Lint Results'
 
 outputs:
   violations-found:
@@ -154,6 +166,16 @@ runs:
         "files-processed=$FILES_PROCESSED" >> $env:GITHUB_OUTPUT
         "files-fixed=$FILES_FIXED" >> $env:GITHUB_OUTPUT
         
+        # Save outputs for PR comment step
+        "VIOLATIONS_FOUND=$VIOLATIONS_FOUND" >> $env:GITHUB_ENV
+        "FILES_PROCESSED=$FILES_PROCESSED" >> $env:GITHUB_ENV
+        "FILES_FIXED=$FILES_FIXED" >> $env:GITHUB_ENV
+        
+        # Save the raw output for PR comments
+        "EDITORLINT_OUTPUT<<EOF" >> $env:GITHUB_ENV
+        $OUTPUT >> $env:GITHUB_ENV
+        "EOF" >> $env:GITHUB_ENV
+        
         # Handle auto-commit (simplified for PowerShell)
         if ("${{ inputs.auto-commit }}" -eq "true" -and "${{ inputs.fix }}" -eq "true" -and [int]$FILES_FIXED -gt 0) {
           Write-Host "Auto-committing fixes..."
@@ -172,4 +194,83 @@ runs:
         if ("${{ inputs.fail-on-violations }}" -eq "true" -and $VIOLATIONS_FOUND -eq "true" -and "${{ inputs.fix }}" -eq "false") {
           Write-Host "Violations found and fail-on-violations is enabled"
           exit 1
+        }
+
+    - name: Handle PR Comments
+      if: inputs.pr-comment == 'true' && inputs.token != '' && github.event_name == 'pull_request'
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        $PR_NUMBER = "${{ github.event.number }}"
+        $REPO_OWNER = "${{ github.repository_owner }}"
+        $REPO_NAME = "${{ github.event.repository.name }}"
+        $COMMENT_HEADER = "${{ inputs.pr-comment-header }}"
+        
+        # Create comment body
+        if ($env:VIOLATIONS_FOUND -eq "true") {
+          if ([int]$env:FILES_FIXED -gt 0 -and "${{ inputs.fix }}" -eq "true") {
+            $COMMENT_BODY = @"
+$COMMENT_HEADER
+
+✅ **Fixed $($env:FILES_FIXED) files with EditorConfig violations**
+
+The following files were automatically fixed:
+``````
+$($env:EDITORLINT_OUTPUT)
+``````
+
+Files processed: $($env:FILES_PROCESSED)
+Files fixed: $($env:FILES_FIXED)
+"@
+          } else {
+            $COMMENT_BODY = @"
+$COMMENT_HEADER
+
+❌ **EditorConfig violations found**
+
+``````
+$($env:EDITORLINT_OUTPUT)
+``````
+
+Files processed: $($env:FILES_PROCESSED)
+Violations found: $($env:VIOLATIONS_FOUND)
+
+Run with ``fix: true`` to automatically fix these issues.
+"@
+          }
+        } else {
+          $COMMENT_BODY = @"
+$COMMENT_HEADER
+
+✅ **No EditorConfig violations found**
+
+Files processed: $($env:FILES_PROCESSED)
+All files comply with .editorconfig rules.
+"@
+        }
+        
+        $headers = @{
+          "Authorization" = "token $env:GITHUB_TOKEN"
+          "Content-Type" = "application/json"
+        }
+        
+        # Check for existing comment
+        $commentsUrl = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/issues/$PR_NUMBER/comments"
+        $comments = Invoke-RestMethod -Uri $commentsUrl -Headers $headers
+        $existingComment = $comments | Where-Object { $_.body -like "$COMMENT_HEADER*" } | Select-Object -First 1
+        
+        $commentBodyJson = $COMMENT_BODY | ConvertTo-Json
+        
+        if ($existingComment) {
+          # Update existing comment
+          Write-Host "Updating existing PR comment (ID: $($existingComment.id))"
+          $updateUrl = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/issues/comments/$($existingComment.id)"
+          $updateBody = @{ body = $COMMENT_BODY } | ConvertTo-Json
+          Invoke-RestMethod -Uri $updateUrl -Method PATCH -Headers $headers -Body $updateBody
+        } else {
+          # Create new comment
+          Write-Host "Creating new PR comment"
+          $createBody = @{ body = $COMMENT_BODY } | ConvertTo-Json
+          Invoke-RestMethod -Uri $commentsUrl -Method POST -Headers $headers -Body $createBody
         }

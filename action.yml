@@ -1,4 +1,4 @@
-name: 'EditorConfig Lint'
+name: 'EditorLint'
 description: 'Validates and fixes files according to .editorconfig rules'
 branding:
   icon: 'check-circle'
@@ -39,7 +39,7 @@ inputs:
   pr-comment-header:
     description: 'Header text for PR comments'
     required: false
-    default: '## 📝 EditorConfig Lint Results'
+    default: '## 📝 EditorLint Results'
 
   # Additional parameters for flexibility
   version:
@@ -106,62 +106,199 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Run EditorConfig Lint (Windows)
-      if: runner.os == 'Windows'
-      uses: editorlint/editorlint/.github/actions/windows@main
-      with:
-        version: ${{ inputs.version }}
-        path: ${{ inputs.path }}
-        config-file: ${{ inputs.config-file || inputs.config }}
-        recurse: ${{ inputs.recurse }}
-        fix: ${{ inputs.fix }}
-        output-format: ${{ inputs.output-format || inputs.reporter }}
-        fail-on-violations: ${{ inputs.fail-on-violations }}
-        auto-commit: ${{ inputs.auto-commit }}
-        commit-message: ${{ inputs.commit-message }}
-        git-user-name: ${{ inputs.git-user-name }}
-        git-user-email: ${{ inputs.git-user-email }}
-        ignore-patterns: ${{ inputs.exclude }}
-        token: ${{ inputs.token }}
-        pr-comment: ${{ inputs.pr-comment }}
-        pr-comment-header: ${{ inputs.pr-comment-header }}
+    - name: Download editorlint binary
+      shell: bash
+      run: |
+        # Determine OS and architecture
+        case "$RUNNER_OS" in
+          "Linux") GOOS="linux" ;;
+          "macOS") GOOS="darwin" ;;
+          "Windows") GOOS="windows" ;;
+          *) echo "Unsupported OS: $RUNNER_OS"; exit 1 ;;
+        esac
 
-    - name: Run EditorConfig Lint (Linux)
-      if: runner.os == 'Linux'
-      uses: editorlint/editorlint/.github/actions/linux@main
-      with:
-        version: ${{ inputs.version }}
-        path: ${{ inputs.path }}
-        config-file: ${{ inputs.config-file || inputs.config }}
-        recurse: ${{ inputs.recurse }}
-        fix: ${{ inputs.fix }}
-        output-format: ${{ inputs.output-format || inputs.reporter }}
-        fail-on-violations: ${{ inputs.fail-on-violations }}
-        auto-commit: ${{ inputs.auto-commit }}
-        commit-message: ${{ inputs.commit-message }}
-        git-user-name: ${{ inputs.git-user-name }}
-        git-user-email: ${{ inputs.git-user-email }}
-        ignore-patterns: ${{ inputs.exclude }}
-        token: ${{ inputs.token }}
-        pr-comment: ${{ inputs.pr-comment }}
-        pr-comment-header: ${{ inputs.pr-comment-header }}
+        case "$RUNNER_ARCH" in
+          "X64") GOARCH="amd64" ;;
+          "ARM64") GOARCH="arm64" ;;
+          *) echo "Unsupported architecture: $RUNNER_ARCH"; exit 1 ;;
+        esac
 
-    - name: Run EditorConfig Lint (macOS)
-      if: runner.os == 'macOS'
-      uses: editorlint/editorlint/.github/actions/macos@main
+        # Get version
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          echo "Fetching latest release version..."
+          VERSION=$(curl -s https://api.github.com/repos/editorlint/editorlint/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "Failed to fetch latest version"
+            exit 1
+          fi
+          echo "Latest version: $VERSION"
+        else
+          VERSION="${{ inputs.version }}"
+          echo "Using specified version: $VERSION"
+        fi
+
+        # Set binary and archive names
+        if [ "$GOOS" = "windows" ]; then
+          BINARY_NAME="editorlint.exe"
+          ARCHIVE_NAME="editorlint_v${VERSION}_${GOOS}_${GOARCH}.zip"
+        else
+          BINARY_NAME="editorlint"
+          ARCHIVE_NAME="editorlint_v${VERSION}_${GOOS}_${GOARCH}.tar.gz"
+        fi
+
+        DOWNLOAD_URL="https://github.com/editorlint/editorlint/releases/download/${VERSION}/${ARCHIVE_NAME}"
+        
+        echo "Downloading $ARCHIVE_NAME..."
+        if ! curl -L -f -o "$ARCHIVE_NAME" "$DOWNLOAD_URL"; then
+          echo "Failed to download $DOWNLOAD_URL"
+          exit 1
+        fi
+
+        # Extract based on file type
+        if [ "$GOOS" = "windows" ]; then
+          unzip -o "$ARCHIVE_NAME" "$BINARY_NAME" -d "${{ github.action_path }}"
+        else
+          tar -xzf "$ARCHIVE_NAME" -C "${{ github.action_path }}" "$BINARY_NAME"
+          chmod +x "${{ github.action_path }}/$BINARY_NAME"
+        fi
+        
+        echo "Successfully downloaded and extracted $BINARY_NAME"
+
+    - name: Run editorlint
+      id: lint  
+      shell: bash
+      run: |
+        cd "${{ github.workspace }}"
+
+        # Build arguments array
+        ARGS=("${{ inputs.path }}")
+
+        if [ "${{ inputs.config-file || inputs.config }}" != "" ]; then
+          ARGS+=("--config" "${{ inputs.config-file || inputs.config }}")
+        fi
+
+        if [ "${{ inputs.recurse }}" = "true" ]; then
+          ARGS+=("--recurse")
+        fi
+
+        if [ "${{ inputs.fix }}" = "true" ]; then
+          ARGS+=("--fix")  
+        fi
+
+        if [ "${{ inputs.output-format || inputs.reporter }}" != "default" ]; then
+          ARGS+=("--output" "${{ inputs.output-format || inputs.reporter }}")
+        fi
+
+        if [ "${{ inputs.exclude }}" != "" ]; then
+          IFS=',' read -ra PATTERNS <<< "${{ inputs.exclude }}"
+          for pattern in "${PATTERNS[@]}"; do
+            trimmed_pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            ARGS+=("--exclude" "$trimmed_pattern")
+          done
+        fi
+
+        # Determine binary path
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          BINARY_PATH="${{ github.action_path }}/editorlint.exe"
+        else
+          BINARY_PATH="${{ github.action_path }}/editorlint"
+        fi
+
+        # Run editorlint
+        set +e
+        OUTPUT=$("$BINARY_PATH" "${ARGS[@]}" 2>&1)
+        EXIT_CODE=$?
+        set -e
+
+        echo "$OUTPUT"
+
+        # Parse results
+        VIOLATIONS_FOUND="false"
+        FILES_PROCESSED="0"
+        FILES_FIXED="0"
+
+        if [ $EXIT_CODE -ne 0 ] && [ "${{ inputs.fix }}" = "false" ]; then
+          VIOLATIONS_FOUND="true"
+        fi
+
+        if echo "$OUTPUT" | grep -q "files processed"; then
+          FILES_PROCESSED=$(echo "$OUTPUT" | grep "files processed" | sed -n 's/.*\([0-9]\+\) files processed.*/\1/p' || echo "0")
+        fi
+
+        if echo "$OUTPUT" | grep -q "files fixed"; then
+          FILES_FIXED=$(echo "$OUTPUT" | grep "files fixed" | sed -n 's/.*\([0-9]\+\) files fixed.*/\1/p' || echo "0")
+          if [ "$FILES_FIXED" != "0" ]; then
+            VIOLATIONS_FOUND="true"
+          fi
+        fi
+
+        # Set outputs
+        echo "violations-found=$VIOLATIONS_FOUND" >> $GITHUB_OUTPUT
+        echo "files-processed=$FILES_PROCESSED" >> $GITHUB_OUTPUT  
+        echo "files-fixed=$FILES_FIXED" >> $GITHUB_OUTPUT
+
+        # Handle auto-commit
+        if [ "${{ inputs.auto-commit }}" = "true" ] && [ "${{ inputs.fix }}" = "true" ] && [ "$FILES_FIXED" != "0" ]; then
+          echo "Auto-committing fixes..."
+          git config --local user.name "${{ inputs.git-user-name }}"
+          git config --local user.email "${{ inputs.git-user-email }}"
+
+          if git diff --exit-code > /dev/null 2>&1; then
+            echo "No changes to commit after fixes"
+          else
+            git add .
+            git commit -m "${{ inputs.commit-message }}"
+            git push
+          fi
+        fi
+
+        # Save outputs for PR comment step
+        echo "VIOLATIONS_FOUND=$VIOLATIONS_FOUND" >> $GITHUB_ENV
+        echo "FILES_PROCESSED=$FILES_PROCESSED" >> $GITHUB_ENV
+        echo "FILES_FIXED=$FILES_FIXED" >> $GITHUB_ENV
+        
+        # Save the raw output for PR comments
+        {
+          echo "EDITORLINT_OUTPUT<<EOF"
+          echo "$OUTPUT"
+          echo "EOF"
+        } >> $GITHUB_ENV
+
+        # Fail if violations found and fail-on-violations is enabled
+        if [ "${{ inputs.fail-on-violations }}" = "true" ] && [ "$VIOLATIONS_FOUND" = "true" ] && [ "${{ inputs.fix }}" = "false" ]; then
+          echo "Violations found and fail-on-violations is enabled"
+          exit 1
+        fi
+
+    - name: Create or Update PR Comment
+      if: inputs.pr-comment == 'true' && inputs.token != '' && github.event_name == 'pull_request'
+      uses: peter-evans/create-or-update-comment@v4
       with:
-        version: ${{ inputs.version }}
-        path: ${{ inputs.path }}
-        config-file: ${{ inputs.config-file || inputs.config }}
-        recurse: ${{ inputs.recurse }}
-        fix: ${{ inputs.fix }}
-        output-format: ${{ inputs.output-format || inputs.reporter }}
-        fail-on-violations: ${{ inputs.fail-on-violations }}
-        auto-commit: ${{ inputs.auto-commit }}
-        commit-message: ${{ inputs.commit-message }}
-        git-user-name: ${{ inputs.git-user-name }}
-        git-user-email: ${{ inputs.git-user-email }}
-        ignore-patterns: ${{ inputs.exclude }}
         token: ${{ inputs.token }}
-        pr-comment: ${{ inputs.pr-comment }}
-        pr-comment-header: ${{ inputs.pr-comment-header }}
+        issue-number: ${{ github.event.pull_request.number }}
+        comment-id: editorlint-results
+        edit-mode: replace
+        body: |
+          ${{ inputs.pr-comment-header }}
+          
+          ${{ env.VIOLATIONS_FOUND == 'true' && env.FILES_FIXED != '0' && inputs.fix == 'true' && format('✅ **Fixed {0} files with EditorConfig violations**
+
+          The following files were automatically fixed:
+          ```
+          {1}
+          ```
+
+          Files processed: {2}
+          Files fixed: {3}', env.FILES_FIXED, env.EDITORLINT_OUTPUT, env.FILES_PROCESSED, env.FILES_FIXED) || env.VIOLATIONS_FOUND == 'true' && format('❌ **EditorConfig violations found**
+
+          ```
+          {0}
+          ```
+
+          Files processed: {1}
+          Violations found: {2}
+
+          Run with `fix: true` to automatically fix these issues.', env.EDITORLINT_OUTPUT, env.FILES_PROCESSED, env.VIOLATIONS_FOUND) || format('✅ **No EditorConfig violations found**
+
+          Files processed: {0}
+          All files comply with .editorconfig rules.', env.FILES_PROCESSED) }}
